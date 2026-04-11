@@ -14,7 +14,7 @@
     "@aws-sdk/client-lambda": "^3.760.0",
     "@google/generative-ai": "^0.24.1",
     "bcryptjs": "^3.0.3",
-    "cors": "^2.8.5",
+    "cors": "^2.8.6",
     "dotenv": "^16.3.1",
     "express": "^4.21.2",
     "express-rate-limit": "^8.3.2",
