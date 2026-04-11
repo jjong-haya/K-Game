@@ -4,8 +4,9 @@
   "private": true,
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check src/app.js && node --check src/app/createApp.js && node --check src/auth.js && node --check src/lambdaClient.js && node --check src/wordTurnService.js && node --check src/routes/authRoutes.js && node --check src/routes/wordRoutes.js && node --check src/routes/promptRoutes.js && node --check src/routes/proposalRoutes.js && node --check src/routes/adminRoutes.js",
+    "check": "node --check server.js && node --check src/app.js && node --check src/app/createApp.js && node --check src/auth.js && node --check src/lambdaClient.js && node --check src/wordTurnService.js && node --check src/modules/daily-word/challengeService.js && node --check src/routes/authRoutes.js && node --check src/routes/wordRoutes.js && node --check src/routes/promptRoutes.js && node --check src/routes/proposalRoutes.js && node --check src/routes/adminRoutes.js && node --check scripts/generate-daily-word.js",
     "migrate": "node scripts/migrate.js",
+    "daily-word:generate": "node scripts/generate-daily-word.js",
     "seed:sample": "node scripts/seed-sample.js",
     "seed:accounts": "node scripts/seed-accounts.js",
     "test": "node --test tests/*.test.js"

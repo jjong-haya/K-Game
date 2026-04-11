@@ -3,6 +3,7 @@ function registerAdminRoutes(app, deps) {
     buildTodayDateString,
     clamp,
     config,
+    dailyWordChallengeService,
     expandProposal,
     getPromptRoom,
     isDuplicateKeyError,
@@ -11,6 +12,110 @@ function registerAdminRoutes(app, deps) {
     safeJsonParse,
     withTransaction,
   } = deps;
+
+  const normalizeChallengeDate = (value) =>
+    (value || buildTodayDateString(config.timezone))
+      .toString()
+      .trim()
+      .slice(0, 10);
+
+  const sendHandledError = (res, error) => {
+    if (error?.status) {
+      res.status(error.status).json({ message: error.message });
+      return true;
+    }
+
+    return false;
+  };
+
+  app.get("/api/admin/daily-word", async (req, res) => {
+    const auth = await requireAdmin(req, res);
+    if (!auth) {
+      return;
+    }
+
+    try {
+      const challengeDate = normalizeChallengeDate(req.query?.date);
+      const challenge = await dailyWordChallengeService.ensureGeneratedDailyWordChallenge({
+        challengeDate,
+      });
+      const categories = await dailyWordChallengeService.listCategories();
+
+      res.json({
+        player: auth.player,
+        challenge,
+        categories,
+      });
+    } catch (error) {
+      if (sendHandledError(res, error)) {
+        return;
+      }
+
+      throw error;
+    }
+  });
+
+  app.put("/api/admin/daily-word", async (req, res) => {
+    const auth = await requireAdmin(req, res);
+    if (!auth) {
+      return;
+    }
+
+    try {
+      const challenge = await dailyWordChallengeService.upsertDailyWordChallenge({
+        challengeDate: normalizeChallengeDate(req.body?.challengeDate),
+        publicTitle: req.body?.publicTitle,
+        hiddenAnswerText: req.body?.hiddenAnswerText,
+        fixedHintText: req.body?.fixedHintText,
+        status: req.body?.status || "active",
+        categoryId: req.body?.categoryId,
+        categorySlug: req.body?.categorySlug,
+        synonyms: req.body?.synonyms,
+      });
+
+      res.json({
+        ok: true,
+        message: "오늘의 단어를 저장했습니다.",
+        challenge,
+      });
+    } catch (error) {
+      if (sendHandledError(res, error)) {
+        return;
+      }
+
+      throw error;
+    }
+  });
+
+  app.post("/api/admin/daily-word/generate", async (req, res) => {
+    const auth = await requireAdmin(req, res);
+    if (!auth) {
+      return;
+    }
+
+    try {
+      const overwrite = Boolean(req.body?.overwrite);
+      const challengeDate = normalizeChallengeDate(req.body?.challengeDate);
+      const challenge = await dailyWordChallengeService.ensureGeneratedDailyWordChallenge({
+        challengeDate,
+        overwrite,
+      });
+
+      res.status(overwrite ? 200 : 201).json({
+        ok: true,
+        message: overwrite
+          ? "오늘의 단어를 자동 후보로 다시 생성했습니다."
+          : "오늘의 단어를 자동으로 준비했습니다.",
+        challenge,
+      });
+    } catch (error) {
+      if (sendHandledError(res, error)) {
+        return;
+      }
+
+      throw error;
+    }
+  });
 
   app.get("/api/admin/proposals", async (req, res) => {
     const auth = await requireAdmin(req, res);
@@ -98,16 +203,14 @@ function registerAdminRoutes(app, deps) {
             10,
             100,
           ),
-          teaserText:
-            (req.body?.teaserText || aiReview.teaserText || "답을 직접 말하게 만드는 방입니다.")
-              .toString()
-              .trim()
-              .slice(0, 255),
-          tone:
-            (req.body?.tone || aiReview.tone || "친한 친구처럼 놀리다가도 흔들리는 캐릭터 톤")
-              .toString()
-              .trim()
-              .slice(0, 255),
+          teaserText: (req.body?.teaserText || aiReview.teaserText || "답을 직접 말하게 만드는 방식입니다.")
+            .toString()
+            .trim()
+            .slice(0, 255),
+          tone: (req.body?.tone || aiReview.tone || "친한 친구처럼 놀리다가도 핵심을 찌르면 흔들리는 캐릭터")
+            .toString()
+            .trim()
+            .slice(0, 255),
           status: (req.body?.status || "active").toString().trim(),
         };
 
@@ -148,7 +251,9 @@ function registerAdminRoutes(app, deps) {
             throw error;
           }
 
-          const duplicateError = new Error("같은 날짜와 정답으로 열린 방이 이미 있습니다. 기존 방을 먼저 확인해 주세요.");
+          const duplicateError = new Error(
+            "같은 날짜와 정답으로 열린 방이 이미 있습니다. 기존 방을 먼저 확인해 주세요.",
+          );
           duplicateError.status = 409;
           throw duplicateError;
         }
@@ -177,9 +282,10 @@ function registerAdminRoutes(app, deps) {
         room: await getPromptRoom(result.roomId),
       });
     } catch (error) {
-      if (error?.status) {
-        return res.status(error.status).json({ message: error.message });
+      if (sendHandledError(res, error)) {
+        return;
       }
+
       throw error;
     }
   });
@@ -232,9 +338,10 @@ function registerAdminRoutes(app, deps) {
 
       res.json({ ok: true });
     } catch (error) {
-      if (error?.status) {
-        return res.status(error.status).json({ message: error.message });
+      if (sendHandledError(res, error)) {
+        return;
       }
+
       throw error;
     }
   });

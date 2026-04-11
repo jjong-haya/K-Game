@@ -354,6 +354,39 @@ export function fetchAdminProposals(session) {
   return request("/api/admin/proposals", {}, withSessionHeaders(session));
 }
 
+export function fetchAdminDailyWord(session, date) {
+  const search = new URLSearchParams();
+
+  if (date) {
+    search.set("date", date);
+  }
+
+  const suffix = search.toString() ? `?${search.toString()}` : "";
+  return request(`/api/admin/daily-word${suffix}`, {}, withSessionHeaders(session));
+}
+
+export function updateAdminDailyWord(session, payload) {
+  return request(
+    "/api/admin/daily-word",
+    {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    },
+    withSessionHeaders(session),
+  );
+}
+
+export function generateAdminDailyWord(session, payload = {}) {
+  return request(
+    "/api/admin/daily-word/generate",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    withSessionHeaders(session),
+  );
+}
+
 export function approveProposal(session, proposalId, payload = {}) {
   return request(
     `/api/admin/proposals/${proposalId}/approve`,

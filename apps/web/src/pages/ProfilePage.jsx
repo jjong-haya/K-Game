@@ -3,10 +3,17 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/useAuth";
 import AppShell from "../components/AppShell";
+import { fetchAdminDailyWord } from "../lib/api";
 
 const NICKNAME_UNSAFE = /[<>"'`;\\]/g;
+
 function sanitizeNickname(raw) {
   return raw.trim().replace(/\s+/g, " ").replace(NICKNAME_UNSAFE, "").slice(0, 40);
+}
+
+function toLocalDateInputValue(date = new Date()) {
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
 }
 
 function ProfilePage() {
@@ -29,6 +36,9 @@ function ProfilePage() {
   const [savingNickname, setSavingNickname] = useState(false);
   const [linkingProvider, setLinkingProvider] = useState("");
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [dailyWord, setDailyWord] = useState(null);
+  const [dailyWordLoading, setDailyWordLoading] = useState(false);
+  const [dailyWordError, setDailyWordError] = useState("");
   const socialLinkCardRef = useRef(null);
 
   useEffect(() => {
@@ -47,16 +57,90 @@ function ProfilePage() {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    let active = true;
+
+    async function loadDailyWord() {
+      if (!isAdmin || !session?.token) {
+        setDailyWord(null);
+        setDailyWordError("");
+        setDailyWordLoading(false);
+        return;
+      }
+
+      try {
+        setDailyWordLoading(true);
+        const data = await fetchAdminDailyWord(session);
+        if (!active) {
+          return;
+        }
+
+        setDailyWord(data?.challenge || null);
+        setDailyWordError("");
+      } catch (requestError) {
+        if (!active) {
+          return;
+        }
+
+        setDailyWord(null);
+        setDailyWordError(requestError.message || "오늘의 단어 정보를 불러오지 못했습니다.");
+      } finally {
+        if (active) {
+          setDailyWordLoading(false);
+        }
+      }
+    }
+
+    loadDailyWord();
+
+    return () => {
+      active = false;
+    };
+  }, [isAdmin, session]);
+
+  const currentSocialLabel = useMemo(() => {
+    if (socialProvider === "apple") {
+      return "Apple 계정 연결 완료";
+    }
+
+    if (socialProvider === "google") {
+      return "Google 계정 연결 완료";
+    }
+
+    if (isIdLogin) {
+      return "ID 계정으로 로그인";
+    }
+
+    return "게스트로 플레이 중";
+  }, [isIdLogin, socialProvider]);
+
+  const adminDailyWordSummary = useMemo(() => {
+    if (!dailyWord) {
+      return "";
+    }
+
+    const categoryName = dailyWord.category?.name || dailyWord.category?.slug || "카테고리 없음";
+    return `${dailyWord.challengeDate || toLocalDateInputValue()} · ${dailyWord.publicTitle || "제목 없음"} · 정답 ${dailyWord.hiddenAnswerText || "-"} · ${categoryName}`;
+  }, [dailyWord]);
+
+  const adminDailyWordStats = useMemo(() => {
+    const stats = dailyWord?.stats || {};
+    return [
+      { label: "참여자", value: stats.participantCount ?? 0 },
+      { label: "시도", value: stats.attemptCount ?? 0 },
+      { label: "정답자", value: stats.winCount ?? 0 },
+    ];
+  }, [dailyWord]);
+
   const shortcutItems = useMemo(
     () =>
       [
         isAdmin
           ? {
-              title: "관리자 도구",
-              description: "대기 중인 제안을 검토하고 운영용 방으로 승인하거나 반려합니다.",
+              title: "관리자 페이지",
+              description: "오늘의 단어 관리, 제안 검토, 자동 생성과 수동 수정은 여기서 할 수 있습니다.",
               to: "/admin",
               disabled: false,
-              disabledText: "",
             }
           : null,
       ].filter(Boolean),
@@ -95,13 +179,15 @@ function ProfilePage() {
         returnTo: "/profile",
       });
     } catch (requestError) {
-      setError(requestError.message || "소셜 계정 연동을 시작하지 못했습니다.");
+      setError(requestError.message || "소셜 계정 연결을 시작하지 못했습니다.");
       setLinkingProvider("");
     }
   };
 
   const handleDeleteAccount = async () => {
-    const confirmed = window.confirm("계정을 삭제하면 세션과 기록을 복구할 수 없습니다. 계속할까요?");
+    const confirmed = window.confirm(
+      "계정을 삭제하면 세션과 기록을 복구할 수 없습니다. 정말 계속할까요?",
+    );
     if (!confirmed) {
       return;
     }
@@ -117,15 +203,6 @@ function ProfilePage() {
       setDeletingAccount(false);
     }
   };
-
-  const currentSocialLabel =
-    socialProvider === "apple"
-      ? "Apple 계정 연결 완료"
-      : socialProvider === "google"
-        ? "Google 계정 연결 완료"
-        : isIdLogin
-          ? "ID 계정으로 로그인"
-          : "게스트로 플레이 중";
 
   return (
     <AppShell maxWidth="max-w-5xl">
@@ -146,12 +223,11 @@ function ProfilePage() {
         ) : null}
 
         <div className="mt-8 grid gap-6 lg:grid-cols-2">
-          {/* 닉네임 */}
           <form onSubmit={handleNicknameSave}>
             <div className="h-full rounded-[1.2rem] border-4 border-ink bg-[#fff9ec] p-5 shadow-brutal-sm">
               <p className="text-lg font-black">닉네임</p>
               <p className="mt-2 text-sm font-medium leading-7">
-                저장한 닉네임은 채팅 기록과 순위표에 표시됩니다.
+                원하는 닉네임은 채팅 기록과 순위표 상단에 표시됩니다.
               </p>
               <label className="mt-4 block space-y-2 text-sm font-bold">
                 <input
@@ -159,7 +235,7 @@ function ProfilePage() {
                   onChange={(event) => setNickname(event.target.value)}
                   maxLength={18}
                   className="w-full rounded-[1rem] border-4 border-ink bg-white px-4 py-3 outline-none focus-visible:ring-4 focus-visible:ring-punch-cyan"
-                  placeholder="예: 프롬프트 장인"
+                  placeholder="예: 노련한 탐험가"
                 />
               </label>
               <button
@@ -172,21 +248,58 @@ function ProfilePage() {
             </div>
           </form>
 
-          {/* 계정 정보 */}
           <div className="rounded-[1.2rem] border-4 border-ink bg-[#fff9ec] p-5 shadow-brutal-sm">
             <p className="text-lg font-black">계정 정보</p>
             <p className="mt-2 text-lg font-bold">{currentSocialLabel}</p>
-            {session?.email ? (
-              <p className="mt-1 text-sm font-medium">{session.email}</p>
-            ) : null}
+            {session?.email ? <p className="mt-1 text-sm font-medium">{session.email}</p> : null}
           </div>
 
-          {/* 게스트: 소셜 연동 */}
+          {isAdmin ? (
+            <div className="rounded-[1.2rem] border-4 border-ink bg-punch-mint/25 p-5 shadow-brutal-sm lg:col-span-2">
+              <p className="text-lg font-black">오늘의 단어 요약</p>
+              {dailyWordLoading ? (
+                <p className="mt-3 text-sm font-medium leading-7">오늘의 단어를 불러오는 중입니다.</p>
+              ) : dailyWordError ? (
+                <p className="mt-3 text-sm font-medium leading-7">{dailyWordError}</p>
+              ) : dailyWord ? (
+                <>
+                  <p className="mt-3 text-sm font-medium leading-7">{adminDailyWordSummary}</p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {adminDailyWordStats.map((stat) => (
+                      <span
+                        key={stat.label}
+                        className="rounded-full border-4 border-ink bg-white px-3 py-1 text-xs font-bold shadow-brutal-sm"
+                      >
+                        {stat.label} {stat.value}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="mt-3 text-sm font-medium leading-7">
+                  오늘의 단어 정보를 아직 불러오지 못했습니다.
+                </p>
+              )}
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <Link to="/admin" className="chunky-button bg-punch-yellow">
+                  관리자 페이지 열기
+                </Link>
+                <span className="text-sm font-medium text-ink/70">
+                  오늘의 단어 수정, 자동 생성, 다시 생성은 관리자 페이지에서 할 수 있습니다.
+                </span>
+              </div>
+            </div>
+          ) : null}
+
           {isGuest ? (
-            <div ref={socialLinkCardRef} className="rounded-[1.2rem] border-4 border-ink bg-[#fff9ec] p-5 shadow-brutal-sm">
-              <p className="text-lg font-black">소셜 연동</p>
+            <div
+              ref={socialLinkCardRef}
+              className="rounded-[1.2rem] border-4 border-ink bg-[#fff9ec] p-5 shadow-brutal-sm"
+            >
+              <p className="text-lg font-black">소셜 계정 연결</p>
               <p className="mt-2 text-sm font-medium leading-7">
-                게스트 계정은 브라우저를 닫거나 로그아웃하면 세션이 사라질 수 있습니다. 기록을 이어가려면 소셜 계정으로 연동해 주세요.
+                게스트 계정은 브라우저를 닫으면 기록이 사라질 수 있습니다. 오래 보관하려면 소셜 계정으로
+                연결해 주세요.
               </p>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <button
@@ -195,7 +308,7 @@ function ProfilePage() {
                   className="chunky-button w-full bg-white"
                   disabled={Boolean(linkingProvider) || isSyncing}
                 >
-                  {linkingProvider === "google" ? "Google 연동 준비 중..." : "Google로 연동하기"}
+                  {linkingProvider === "google" ? "Google 연결 중..." : "Google로 연결하기"}
                 </button>
                 <button
                   type="button"
@@ -203,15 +316,17 @@ function ProfilePage() {
                   className="chunky-button w-full bg-white"
                   disabled={Boolean(linkingProvider) || isSyncing}
                 >
-                  {linkingProvider === "apple" ? "Apple 연동 준비 중..." : "Apple로 연동하기"}
+                  {linkingProvider === "apple" ? "Apple 연결 중..." : "Apple로 연결하기"}
                 </button>
               </div>
             </div>
           ) : null}
 
-          {/* 관리자 도구 */}
           {shortcutItems.map((item) => (
-            <div key={item.title} className="rounded-[1.2rem] border-4 border-ink bg-[#fff9ec] p-5 shadow-brutal-sm">
+            <div
+              key={item.title}
+              className="rounded-[1.2rem] border-4 border-ink bg-[#fff9ec] p-5 shadow-brutal-sm"
+            >
               <p className="text-lg font-black">{item.title}</p>
               <p className="mt-2 text-sm font-medium leading-7">{item.description}</p>
               <Link to={item.to} className="chunky-button mt-4 bg-white">
@@ -220,11 +335,10 @@ function ProfilePage() {
             </div>
           ))}
 
-          {/* 계정 삭제 — 홀수개일 때 전체 너비 */}
           <div className="rounded-[1.2rem] border-4 border-ink bg-punch-pink/30 p-5 shadow-brutal-sm lg:col-span-2">
             <p className="text-lg font-black">계정 삭제</p>
             <p className="mt-2 text-sm font-medium leading-7">
-              계정을 삭제하면 현재 세션과 연결된 기록을 복구할 수 없습니다.
+              계정을 삭제하면 현재 세션과 기록을 복구할 수 없습니다.
             </p>
             <button
               type="button"

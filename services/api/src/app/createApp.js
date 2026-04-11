@@ -6,6 +6,7 @@ const helmet = require("helmet");
 const { createAuthService } = require("../auth");
 const config = require("../config");
 const { requestLambdaOperation } = require("../lambdaClient");
+const { createDailyWordChallengeService } = require("../modules/daily-word/challengeService");
 const {
   createWordTurnService,
   mapEmotionToLegacyState,
@@ -47,6 +48,11 @@ const { registerWordRoutes } = require("../routes/wordRoutes");
 function createApp({ pool }) {
   const app = express();
   const authService = createAuthService({ pool, config });
+  const dailyWordChallengeService = createDailyWordChallengeService({
+    pool,
+    buildTodayDateString,
+    timezone: config.timezone,
+  });
   app.disable("x-powered-by");
 
   const corsOrigins =
@@ -402,60 +408,17 @@ function createApp({ pool }) {
   };
 
   async function listCategories() {
-    const [rows] = await pool.query(
-      "SELECT id, slug, name, display_order FROM categories ORDER BY display_order ASC, id ASC",
-    );
-    return rows.map((row) => ({
-      id: Number(row.id),
-      slug: row.slug,
-      name: row.name,
-      displayOrder: Number(row.display_order || 0),
-    }));
+    return dailyWordChallengeService.listCategories();
   }
 
   async function getDailyWordChallenge() {
-    const [rows] = await pool.query(
-      `
-        SELECT
-          daily.*,
-          categories.id AS category_id,
-          categories.slug AS category_slug,
-          categories.name AS category_name
-        FROM daily_word_challenges AS daily
-        INNER JOIN categories ON categories.id = daily.hidden_category_id
-        WHERE daily.challenge_date = ?
-        ORDER BY daily.id DESC
-        LIMIT 1
-      `,
-      [buildTodayDateString(config.timezone)],
-    );
-
-    const row = rows[0];
-    if (!row) {
-      return null;
-    }
-
-    return {
-      id: Number(row.id),
-      challengeDate: row.challenge_date,
-      publicTitle: row.public_title,
-      hiddenAnswerText: row.hidden_answer_text,
-      fixedHintText: row.fixed_hint_text || "",
-      status: row.status,
-      category: {
-        id: Number(row.category_id),
-        slug: row.category_slug,
-        name: row.category_name,
-      },
-    };
+    return dailyWordChallengeService.ensureGeneratedDailyWordChallenge({
+      challengeDate: buildTodayDateString(config.timezone),
+    });
   }
 
-  async function getDailySynonyms(challengeId) {
-    const [rows] = await pool.query(
-      "SELECT synonym_text FROM daily_word_synonyms WHERE challenge_id = ? ORDER BY id ASC",
-      [challengeId],
-    );
-    return rows.map((row) => row.synonym_text);
+  async function getDailySynonyms(challengeId, executor = pool) {
+    return dailyWordChallengeService.getDailySynonyms(challengeId, executor);
   }
 
   async function getPromptRoom(roomId, executor = pool) {
@@ -1005,7 +968,7 @@ function createApp({ pool }) {
       challenge: {
         id: challenge.id,
         challengeDate: challenge.challengeDate,
-        publicTitle: "오늘의 단어",
+        publicTitle: challenge.publicTitle || "오늘의 단어",
         categoryName: challenge.category.name,
         hiddenCategoryName: challenge.category.name,
         highestSimilarityText: bestAttempt?.inputText || null,
@@ -1150,19 +1113,20 @@ function createApp({ pool }) {
     buildPromptInvalidMessage,
     buildPromptState,
     buildPromptSuccessMessage,
-    buildStoredHintType,
-    buildTodayDateString,
-    buildWordReactionMeta,
-    buildWordSnapshot,
-    buildWordSuccessMessage,
-    clamp,
-    clearSessionCookie,
-    config,
-    ensureDailyWordChallengeAvailable,
-    ensureParticipant,
-    ensureWordInputValid,
-    evaluatePromptInput,
-    expandProposal,
+      buildStoredHintType,
+      buildTodayDateString,
+      buildWordReactionMeta,
+      buildWordSnapshot,
+      buildWordSuccessMessage,
+      clamp,
+      clearSessionCookie,
+      config,
+      dailyWordChallengeService,
+      ensureDailyWordChallengeAvailable,
+      ensureParticipant,
+      ensureWordInputValid,
+      evaluatePromptInput,
+      expandProposal,
     getDailySynonyms,
     getDailyWordChallenge,
     getNickname,
