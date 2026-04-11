@@ -1,0 +1,25 @@
+{
+  "name": "daily-prompt-game-server",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check src/app.js && node --check src/app/createApp.js && node --check src/auth.js && node --check src/lambdaClient.js && node --check src/wordTurnService.js && node --check src/routes/authRoutes.js && node --check src/routes/wordRoutes.js && node --check src/routes/promptRoutes.js && node --check src/routes/proposalRoutes.js && node --check src/routes/adminRoutes.js",
+    "migrate": "node scripts/migrate.js",
+    "seed:sample": "node scripts/seed-sample.js",
+    "seed:accounts": "node scripts/seed-accounts.js",
+    "test": "node --test tests/**/*.test.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-lambda": "^3.760.0",
+    "@google/generative-ai": "^0.24.1",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.21.2",
+    "express-rate-limit": "^8.3.2",
+    "helmet": "^8.1.0",
+    "jose": "^5.9.6",
+    "mysql2": "^3.16.2"
+  }
+}

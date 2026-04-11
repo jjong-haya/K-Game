@@ -1,0 +1,14 @@
+{
+  "name": "k-game-word-reply-lambda",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.js",
+  "scripts": {
+    "check": "node --check src/index.js",
+    "test": "node --test tests/index.test.js",
+    "zip": "powershell Compress-Archive -Path src,tests,package.json,package-lock.json,README.md,node_modules -DestinationPath word-reply.zip -Force"
+  },
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.760.0"
+  }
+}

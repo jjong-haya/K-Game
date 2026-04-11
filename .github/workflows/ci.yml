@@ -1,0 +1,131 @@
+name: ci
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm test
+      - run: npm run check
+
+  lambdas:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [prompt-engine, prompt-hint, word-judge, word-reply]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+        working-directory: services/lambdas/${{ matrix.service }}
+      - run: npm test
+        working-directory: services/lambdas/${{ matrix.service }}
+
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform init -backend=false
+      - run: terraform validate
+
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check docs and repo hygiene
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          roots = [
+              Path("README.md"),
+              Path("package.json"),
+              Path("docs/project-overview.md"),
+              Path("docs/architecture.md"),
+              Path("docs/architecture-faq.md"),
+              Path("docs/auth-policy.md"),
+              Path("docs/api-spec.md"),
+              Path("docs/deployment.md"),
+              Path("docs/security-checklist.md"),
+              Path("docs/troubleshooting.md"),
+              Path("docs/demo-script.md"),
+              Path("docs/repository-guide.md"),
+              Path("infra/README.md"),
+              Path("infra/scripts/README.md"),
+              Path("infra/terraform/README.md"),
+              Path(".github/pull_request_template.md"),
+              Path(".github/ISSUE_TEMPLATE/bug_report.md"),
+              Path(".github/ISSUE_TEMPLATE/feature_request.md"),
+          ]
+          forbidden = [
+              r"C:\\Users\\",
+              r"/C:/Users/",
+              r"client/",
+              r"server/",
+              r"deploy/",
+              r"game-lambda/",
+              r"word-judge-lambda/",
+              r"word-reply-lambda/",
+              r"bedrock-lambda/",
+              r"gemini-lambda/",
+              r"README_AWS\.md",
+          ]
+
+          files = []
+          for root in roots:
+              if root.is_file():
+                  files.append(root)
+              elif root.is_dir():
+                  files.extend([p for p in root.rglob("*") if p.is_file()])
+
+          bad = []
+          for path in files:
+              try:
+                  text = path.read_text(encoding="utf-8")
+              except Exception:
+                  continue
+              for pattern in forbidden:
+                  if re.search(pattern, text):
+                      bad.append(f"{path}: {pattern}")
+
+          if bad:
+              print("Forbidden references found:")
+              for item in bad:
+                  print(item)
+              sys.exit(1)
+          print("Repo hygiene check passed.")
+          PY

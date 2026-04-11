@@ -1,0 +1,16 @@
+aws_region          = "ap-northeast-2"
+project_name         = "k-game"
+environment          = "prod"
+frontend_bucket_name  = "k-game-prod-frontend"
+custom_domain_name    = ""
+vpc_id                = "vpc-xxxxxxxx"
+public_subnet_ids     = ["subnet-aaaaaaa", "subnet-bbbbbbb"]
+private_subnet_ids    = ["subnet-ccccccc", "subnet-ddddddd"]
+ec2_ami_id            = "ami-xxxxxxxx"
+ec2_instance_type     = "t3.small"
+db_name               = "k_game"
+db_username           = "k_game_admin"
+db_password           = "change-me"
+db_instance_class     = "db.t3.small"
+db_allocated_storage  = 20
+log_retention_days    = 30
