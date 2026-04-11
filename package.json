@@ -10,6 +10,6 @@
     "test:api": "npm --prefix ./services/api test",
     "test:lambdas": "npm --prefix ./services/lambdas/prompt-engine test && npm --prefix ./services/lambdas/prompt-hint test && npm --prefix ./services/lambdas/word-judge test && npm --prefix ./services/lambdas/word-reply test",
     "check:api": "npm --prefix ./services/api run check",
-    "check:infra": "terraform -chdir=./infra/terraform init -backend=false && terraform -chdir=./infra/terraform validate"
+    "check:infra": "node ./infra/scripts/check-terraform.js"
   }
 }

@@ -1,0 +1,9 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 평가/발표 전 점검 요청
+    url: https://github.com/jjong-haya/K-Game/issues/new?template=release_checklist.md
+    about: 공개 저장소 점검, 발표 준비, 배포 전 체크가 필요할 때 사용합니다.
+  - name: 보안 취약점 비공개 신고
+    url: https://github.com/jjong-haya/K-Game/security/advisories/new
+    about: 공개 이슈 대신 비공개 경로로 취약점을 신고합니다.
+
