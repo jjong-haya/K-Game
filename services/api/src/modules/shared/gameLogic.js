@@ -87,7 +87,14 @@ function formatKoreanDateTime(value, timezone = "Asia/Seoul") {
   const hour = Number(lookup.hour || 0);
   const minute = Number(lookup.minute || 0);
   const second = Number(lookup.second || 0);
-  const dayPeriod = lookup.dayPeriod || "";
+  let dayPeriod = lookup.dayPeriod || "";
+
+  const rawPeriod = dayPeriod.toUpperCase();
+  if (rawPeriod === "AM") {
+    dayPeriod = "오전";
+  } else if (rawPeriod === "PM") {
+    dayPeriod = "오후";
+  }
 
   if (!month || !day) {
     return "";
