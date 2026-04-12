@@ -87,20 +87,17 @@ function formatKoreanDateTime(value, timezone = "Asia/Seoul") {
   const hour = Number(lookup.hour || 0);
   const minute = Number(lookup.minute || 0);
   const second = Number(lookup.second || 0);
-  let dayPeriod = lookup.dayPeriod || "";
-
-  const rawPeriod = dayPeriod.toUpperCase();
-  if (rawPeriod === "AM") {
-    dayPeriod = "오전";
-  } else if (rawPeriod === "PM") {
-    dayPeriod = "오후";
-  }
+  const dayPeriod = lookup.dayPeriod || "";
 
   if (!month || !day) {
     return "";
   }
 
-  return `${month}월 ${day}일 ${dayPeriod} ${hour}시 ${minute}분 ${second}초`.replace(/\s+/g, " ").trim();
+  return `${month}월 ${day}일 ${dayPeriod} ${hour}시 ${minute}분 ${second}초`
+    .replace(/AM/i, "오전")
+    .replace(/PM/i, "오후")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function clamp(value, min, max) {
