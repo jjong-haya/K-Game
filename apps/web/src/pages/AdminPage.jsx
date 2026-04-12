@@ -32,7 +32,11 @@ function normalizeDailyWord(payload) {
 
 function normalizeSynonymsText(synonyms) {
   if (Array.isArray(synonyms)) {
-    return synonyms.filter(Boolean).map((value) => String(value).trim()).filter(Boolean).join(", ");
+    return synonyms
+      .filter(Boolean)
+      .map((value) => String(value).trim())
+      .filter(Boolean)
+      .join(", ");
   }
 
   if (typeof synonyms === "string") {
@@ -79,7 +83,7 @@ function buildCategoryPayload(categoryValue) {
 
 function buildDailyWordForm(challenge, fallbackDate) {
   return {
-    publicTitle: challenge?.publicTitle || "",
+    publicTitle: challenge?.publicTitle || "오늘의 단어",
     hiddenAnswerText: challenge?.hiddenAnswerText || "",
     fixedHintText: challenge?.fixedHintText || "",
     categoryValue: challenge?.category ? getCategoryOptionValue(challenge.category) : "",
@@ -94,23 +98,35 @@ function buildStatusStats(challenge) {
     {
       label: "참여자",
       value: stats.participantCount ?? 0,
-      hint: "오늘의 단어에 참여한 사용자 수",
+      hint: "이 날짜의 오늘의 단어에 참여한 사용자 수",
     },
     {
       label: "시도 수",
       value: stats.attemptCount ?? 0,
-      hint: "전체 입력 시도 횟수",
+      hint: "전체 시도 횟수",
     },
     {
-      label: "정답자",
+      label: "정답 수",
       value: stats.winCount ?? 0,
       hint: "정답을 맞힌 사용자 수",
     },
   ];
 }
 
+function InfoBanner({ tone = "info", children }) {
+  const toneClass =
+    tone === "error" ? "bg-punch-pink" : tone === "success" ? "bg-punch-mint" : "bg-punch-yellow";
+
+  return (
+    <div className={`rounded-[1.2rem] border-4 border-ink px-4 py-4 shadow-brutal-sm ${toneClass}`}>
+      <p className="text-sm font-bold leading-7">{children}</p>
+    </div>
+  );
+}
+
 function AdminPage() {
   const { session, isReady, isAdmin } = useAuth();
+
   const [proposals, setProposals] = useState([]);
   const [proposalLoading, setProposalLoading] = useState(false);
   const [proposalError, setProposalError] = useState("");
@@ -124,9 +140,7 @@ function AdminPage() {
   const [dailyError, setDailyError] = useState("");
   const [dailyMessage, setDailyMessage] = useState("");
   const [dailyBusyAction, setDailyBusyAction] = useState("");
-  const [dailyForm, setDailyForm] = useState(() =>
-    buildDailyWordForm(null, toLocalDateInputValue()),
-  );
+  const [dailyForm, setDailyForm] = useState(() => buildDailyWordForm(null, toLocalDateInputValue()));
 
   const loadProposals = useCallback(async () => {
     if (!session?.token || !isAdmin) {
@@ -161,7 +175,7 @@ function AdminPage() {
         const data = await fetchAdminDailyWord(session, dateValue);
         const normalized = normalizeDailyWord(data);
         const challenge = normalized.challenge;
-        const resolvedDate = challenge?.challengeDate || dateValue || toLocalDateInputValue();
+        const resolvedDate = dateValue || challenge?.challengeDate || toLocalDateInputValue();
 
         setDailyWord(challenge);
         setDailyCategories(normalized.categories);
@@ -169,8 +183,10 @@ function AdminPage() {
         setDailyForm(buildDailyWordForm(challenge, resolvedDate));
         setDailyError("");
       } catch (requestError) {
+        const fallbackDate = dateValue || toLocalDateInputValue();
         setDailyWord(null);
         setDailyCategories([]);
+        setDailyForm(buildDailyWordForm(null, fallbackDate));
         setDailyError(requestError.message || "오늘의 단어 정보를 불러오지 못했습니다.");
       } finally {
         setDailyLoading(false);
@@ -196,11 +212,11 @@ function AdminPage() {
     const currentCategory = dailyWord?.category;
 
     if (
-      currentCategory &&
-      !categories.some(
+      currentCategory
+      && !categories.some(
         (category) =>
-          String(category?.id || "") === String(currentCategory.id || "") &&
-          String(category?.slug || "") === String(currentCategory.slug || ""),
+          String(category?.id || "") === String(currentCategory.id || "")
+          && String(category?.slug || "") === String(currentCategory.slug || ""),
       )
     ) {
       categories.unshift(currentCategory);
@@ -209,7 +225,25 @@ function AdminPage() {
     return categories;
   }, [dailyCategories, dailyWord?.category]);
 
+  const proposalCards = useMemo(
+    () =>
+      proposals.slice(0, 4).map((proposal) => ({
+        id: proposal.id,
+        label: proposal.categoryName || proposal.categorySlug || "제안",
+        value: proposal.proposedAnswer || "제안 제목 없음",
+        badge: proposal.status || "pending",
+      })),
+    [proposals],
+  );
+
+  const currentChallenge = dailyWord || {};
+  const hasExistingDailyWord = Boolean(currentChallenge.challengeDate);
   const dailyStats = useMemo(() => buildStatusStats(dailyWord), [dailyWord]);
+  const summaryCategory = currentChallenge.category?.name || currentChallenge.category?.slug || "카테고리 없음";
+  const summaryStatus = currentChallenge.status || "draft";
+  const summarySynonyms = Array.isArray(currentChallenge.synonyms) ? currentChallenge.synonyms : [];
+  const generateActionLabel = hasExistingDailyWord ? "다시 생성" : "자동 생성";
+  const generateBusyLabel = hasExistingDailyWord ? "다시 생성 중..." : "자동 생성 중...";
 
   const handleApprove = async (proposal) => {
     try {
@@ -218,9 +252,7 @@ function AdminPage() {
         maxInputChars: proposal.recommendedMaxInputChars || proposal.maxInputChars,
         thresholdScore: proposal.recommendedThresholdScore || proposal.thresholdScore,
         teaserText: proposal.teaserText || proposal.proposalNote || "",
-        tone:
-          proposal.tone ||
-          "참여자들이 쉽게 이해할 수 있도록 부드럽고 명확한 어조로 정리합니다.",
+        tone: proposal.tone || "참여자가 바로 이해할 수 있도록 친절하고 명확한 톤",
         reviewNote: "관리자 승인",
       });
       setProposalMessage("제안을 승인했습니다.");
@@ -249,6 +281,7 @@ function AdminPage() {
 
   const handleDailyChange = (field) => (event) => {
     const value = event.target.value;
+
     if (field === "challengeDate") {
       setSelectedDate(value);
       return;
@@ -263,16 +296,14 @@ function AdminPage() {
   const handleDailySave = async () => {
     try {
       setDailyBusyAction("save");
-      const payload = {
+      await updateAdminDailyWord(session, {
         challengeDate: selectedDate,
         publicTitle: dailyForm.publicTitle.trim(),
         hiddenAnswerText: dailyForm.hiddenAnswerText.trim(),
         fixedHintText: dailyForm.fixedHintText.trim(),
         synonyms: parseSynonymsText(dailyForm.synonymsText),
         ...buildCategoryPayload(dailyForm.categoryValue),
-      };
-
-      await updateAdminDailyWord(session, payload);
+      });
       setDailyMessage("오늘의 단어를 저장했습니다.");
       setDailyError("");
       await loadDailyWord(selectedDate);
@@ -283,12 +314,15 @@ function AdminPage() {
     }
   };
 
-  const handleDailyGenerate = async (overwrite = false) => {
+  const handleDailyGenerate = async () => {
+    const overwrite = Boolean(dailyWord?.challengeDate);
+
     try {
       setDailyBusyAction(overwrite ? "overwrite" : "generate");
       await generateAdminDailyWord(session, {
         challengeDate: selectedDate,
         overwrite,
+        ...buildCategoryPayload(dailyForm.categoryValue),
       });
       setDailyMessage(overwrite ? "오늘의 단어를 다시 생성했습니다." : "오늘의 단어를 자동 생성했습니다.");
       setDailyError("");
@@ -300,17 +334,6 @@ function AdminPage() {
     }
   };
 
-  const proposalCards = useMemo(
-    () =>
-      proposals.slice(0, 4).map((proposal) => ({
-        id: proposal.id,
-        label: proposal.categoryName || proposal.categorySlug || "제안",
-        value: proposal.proposedAnswer || "제안 제목 없음",
-        badge: proposal.status || "pending",
-      })),
-    [proposals],
-  );
-
   if (!isReady) {
     return null;
   }
@@ -319,28 +342,23 @@ function AdminPage() {
     return (
       <AppShell maxWidth="max-w-5xl">
         <section className="brutal-panel bg-white">
-          <h1 className="text-3xl font-bold">관리자 권한이 필요합니다</h1>
+          <h1 className="text-3xl font-bold">관리자 권한이 필요합니다.</h1>
           <p className="mt-3 text-sm font-medium leading-7">
-            이 페이지는 서버에서 허용한 관리자 계정만 사용할 수 있습니다. 관리자 이메일 또는 사용자 ID 설정을
-            확인해 주세요.
+            이 페이지는 서버에서 허용한 관리자 계정으로만 접근할 수 있습니다. 관리자 이메일 또는 사용자 ID
+            설정을 다시 확인해 주세요.
           </p>
         </section>
       </AppShell>
     );
   }
 
-  const currentChallenge = dailyWord || {};
-  const summaryCategory = currentChallenge.category?.name || currentChallenge.category?.slug || "카테고리 없음";
-  const summaryStatus = currentChallenge.status || "draft";
-  const summarySynonyms = Array.isArray(currentChallenge.synonyms) ? currentChallenge.synonyms : [];
-
   return (
     <AppShell maxWidth="max-w-6xl">
       <div className="space-y-6">
         <DailyHeader
           title="오늘의 단어 관리"
-          subtitle="오늘의 단어를 직접 확인하고, 자동 생성과 수동 수정을 한 곳에서 관리할 수 있습니다."
-          chips={["자동 생성", "수동 수정", "관리자 전용"]}
+          subtitle="날짜를 바꾸면 먼저 조회만 하고, 비어 있으면 자동 생성, 이미 있으면 같은 버튼이 다시 생성으로 바뀝니다."
+          chips={["관리자 전용", "자동 생성", "수동 수정"]}
           stats={dailyStats}
           layout="inline-stats"
         />
@@ -348,30 +366,25 @@ function AdminPage() {
         <section className="brutal-panel bg-white">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-3xl">
-              <span className="section-label bg-punch-mint">TODAY'S WORD</span>
-              <h2 className="mt-4 text-3xl font-bold md:text-4xl">오늘의 단어 상세 관리</h2>
+              <span className="section-label bg-punch-mint">TODAY&apos;S WORD</span>
+              <h2 className="mt-4 text-3xl font-bold md:text-4xl">하나의 버튼으로 생성 흐름 정리</h2>
               <p className="mt-3 text-sm font-medium leading-7">
-                날짜를 바꾸면 해당 날짜의 단어를 불러옵니다. 저장은 수동 수정, 자동 생성은 새 항목 생성,
-                다시 생성은 덮어쓰기용입니다.
+                예전에는 자동 생성과 다시 생성이 따로 있었고, 조회만 해도 생성이 섞이는 문제가 있었습니다.
+                이제는 선택한 날짜를 먼저 조회한 뒤, 단어가 없으면 <strong>자동 생성</strong>, 이미 있으면 같은
+                버튼이 <strong>다시 생성</strong>으로 바뀝니다.
               </p>
             </div>
 
             <div className="flex flex-wrap gap-3">
               <button
                 type="button"
-                onClick={() => handleDailyGenerate(false)}
+                onClick={handleDailyGenerate}
                 disabled={dailyBusyAction === "generate" || dailyBusyAction === "overwrite" || dailyLoading}
                 className="chunky-button bg-punch-yellow"
               >
-                {dailyBusyAction === "generate" ? "자동 생성 중..." : "자동 생성"}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDailyGenerate(true)}
-                disabled={dailyBusyAction === "generate" || dailyBusyAction === "overwrite" || dailyLoading}
-                className="chunky-button bg-white"
-              >
-                {dailyBusyAction === "overwrite" ? "다시 생성 중..." : "다시 생성"}
+                {dailyBusyAction === "generate" || dailyBusyAction === "overwrite"
+                  ? generateBusyLabel
+                  : generateActionLabel}
               </button>
               <button
                 type="button"
@@ -385,14 +398,13 @@ function AdminPage() {
           </div>
 
           {dailyMessage ? (
-            <div className="mt-5 rounded-[1.2rem] border-4 border-ink bg-punch-mint px-4 py-4 shadow-brutal-sm">
-              <p className="text-sm font-bold">{dailyMessage}</p>
+            <div className="mt-5">
+              <InfoBanner tone="success">{dailyMessage}</InfoBanner>
             </div>
           ) : null}
-
           {dailyError ? (
-            <div className="mt-5 rounded-[1.2rem] border-4 border-ink bg-punch-pink px-4 py-4 shadow-brutal-sm">
-              <p className="text-sm font-bold">{dailyError}</p>
+            <div className="mt-5">
+              <InfoBanner tone="error">{dailyError}</InfoBanner>
             </div>
           ) : null}
 
@@ -416,7 +428,7 @@ function AdminPage() {
                     onChange={handleDailyChange("categoryValue")}
                     className="mt-2 w-full rounded-[1rem] border-4 border-ink bg-white px-4 py-3 text-sm font-medium outline-none focus-visible:ring-4 focus-visible:ring-punch-cyan"
                   >
-                    <option value="">카테고리를 선택하세요</option>
+                    <option value="">카테고리를 선택해 주세요</option>
                     {categoryOptions.map((category) => (
                       <option key={`${category.id || category.slug}`} value={getCategoryOptionValue(category)}>
                         {category.name || category.slug || "카테고리"}
@@ -431,7 +443,7 @@ function AdminPage() {
                 <input
                   value={dailyForm.publicTitle}
                   onChange={handleDailyChange("publicTitle")}
-                  placeholder="예: 오늘의 단어 힌트"
+                  placeholder="예: 오늘의 단어"
                   className="mt-2 w-full rounded-[1rem] border-4 border-ink bg-white px-4 py-3 text-sm font-medium outline-none focus-visible:ring-4 focus-visible:ring-punch-cyan"
                 />
               </label>
@@ -441,7 +453,7 @@ function AdminPage() {
                 <input
                   value={dailyForm.hiddenAnswerText}
                   onChange={handleDailyChange("hiddenAnswerText")}
-                  placeholder="예: 훈민정음"
+                  placeholder="예: 자동스케일링"
                   className="mt-2 w-full rounded-[1rem] border-4 border-ink bg-white px-4 py-3 text-sm font-medium outline-none focus-visible:ring-4 focus-visible:ring-punch-cyan"
                 />
               </label>
@@ -452,7 +464,7 @@ function AdminPage() {
                   value={dailyForm.fixedHintText}
                   onChange={handleDailyChange("fixedHintText")}
                   rows={4}
-                  placeholder="관리자가 보여줄 고정 힌트를 적어 주세요."
+                  placeholder="플레이어에게 항상 보여 줄 기본 힌트를 적어 주세요."
                   className="mt-2 w-full rounded-[1rem] border-4 border-ink bg-white px-4 py-3 text-sm font-medium leading-7 outline-none focus-visible:ring-4 focus-visible:ring-punch-cyan"
                 />
               </label>
@@ -463,7 +475,7 @@ function AdminPage() {
                   value={dailyForm.synonymsText}
                   onChange={handleDailyChange("synonymsText")}
                   rows={4}
-                  placeholder="쉼표 또는 줄바꿈으로 구분해서 입력하세요."
+                  placeholder="쉼표 또는 줄바꿈으로 구분해서 입력해 주세요."
                   className="mt-2 w-full rounded-[1rem] border-4 border-ink bg-white px-4 py-3 text-sm font-medium leading-7 outline-none focus-visible:ring-4 focus-visible:ring-punch-cyan"
                 />
               </label>
@@ -472,7 +484,7 @@ function AdminPage() {
             <div className="space-y-4">
               <article className="rounded-[1.2rem] border-4 border-ink bg-[#fff9ec] p-5 shadow-brutal-sm">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-lg font-black">현재 단어 보기</p>
+                  <p className="text-lg font-black">현재 저장된 단어</p>
                   <span className="rounded-full border-4 border-ink bg-punch-yellow px-3 py-1 text-xs font-bold shadow-brutal-sm">
                     {summaryStatus}
                   </span>
@@ -514,7 +526,8 @@ function AdminPage() {
                   </div>
                 ) : (
                   <p className="mt-4 text-sm font-medium leading-7">
-                    아직 선택한 날짜의 단어가 없습니다. 자동 생성 또는 저장으로 새 단어를 만들 수 있습니다.
+                    아직 이 날짜에는 오늘의 단어가 없습니다. 지금 버튼을 누르면 <strong>자동 생성</strong>으로
+                    동작합니다.
                   </p>
                 )}
               </article>
@@ -546,17 +559,8 @@ function AdminPage() {
           />
 
           <div className="space-y-4">
-            {proposalMessage ? (
-              <div className="rounded-[1.2rem] border-4 border-ink bg-punch-mint px-4 py-4 shadow-brutal-sm">
-                <p className="text-sm font-bold">{proposalMessage}</p>
-              </div>
-            ) : null}
-
-            {proposalError ? (
-              <div className="rounded-[1.2rem] border-4 border-ink bg-punch-pink px-4 py-4 shadow-brutal-sm">
-                <p className="text-sm font-bold">{proposalError}</p>
-              </div>
-            ) : null}
+            {proposalMessage ? <InfoBanner tone="success">{proposalMessage}</InfoBanner> : null}
+            {proposalError ? <InfoBanner tone="error">{proposalError}</InfoBanner> : null}
 
             {proposalLoading ? (
               <div className="brutal-panel bg-punch-yellow">
@@ -613,26 +617,19 @@ function AdminPage() {
                     <article className="rounded-[1rem] border-4 border-ink bg-punch-orange p-4 shadow-brutal-sm">
                       <p className="text-xs font-bold uppercase tracking-[0.16em]">톤</p>
                       <p className="mt-2 text-sm font-medium leading-7">
-                        {proposal.tone || "참여자들이 쉽게 이해할 수 있도록 정리합니다."}
+                        {proposal.tone || "참여자가 바로 이해할 수 있도록 정리된 톤입니다."}
                       </p>
                     </article>
                   </div>
-
-                  {proposal.reviewNote ? (
-                    <div className="mt-4 rounded-[1rem] border-4 border-ink bg-[#fff9ec] p-4 shadow-brutal-sm">
-                      <p className="text-xs font-bold uppercase tracking-[0.16em]">최종 검토 메모</p>
-                      <p className="mt-2 text-sm font-medium leading-7">{proposal.reviewNote}</p>
-                    </div>
-                  ) : null}
 
                   <div className="mt-4 flex flex-wrap gap-3">
                     <button
                       type="button"
                       onClick={() => handleApprove(proposal)}
                       disabled={busyProposalId === proposal.id}
-                      className="chunky-button bg-punch-yellow"
+                      className="chunky-button bg-punch-mint"
                     >
-                      승인
+                      {busyProposalId === proposal.id ? "처리 중..." : "승인"}
                     </button>
                     <button
                       type="button"
@@ -640,14 +637,14 @@ function AdminPage() {
                       disabled={busyProposalId === proposal.id}
                       className="chunky-button bg-white"
                     >
-                      반려
+                      {busyProposalId === proposal.id ? "처리 중..." : "반려"}
                     </button>
                   </div>
                 </article>
               ))
             ) : (
               <div className="brutal-panel bg-white">
-                <p className="text-sm font-medium leading-7">검토할 제안이 없습니다.</p>
+                <p className="text-sm font-medium leading-7">현재 검토할 제안이 없습니다.</p>
               </div>
             )}
           </div>

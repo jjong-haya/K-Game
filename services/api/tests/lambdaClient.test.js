@@ -5,47 +5,47 @@ const { buildLambdaPayload, parseLambdaResponse } = require("../src/lambdaClient
 
 test("buildLambdaPayload normalizes ai hint payloads with legacy wire compatibility", () => {
   const payload = buildLambdaPayload("ai_hint", {
-    hiddenAnswer: "훈민정음",
-    userInput: "한글",
-    hiddenCategory: "국어",
+    hiddenAnswer: "정답예시",
+    userInput: "사과",
+    hiddenCategory: "과일",
     highestSimilarityGuess: {
-      text: "훈민정음 해례본",
+      text: "정답예시 후보",
       proximityScore: 72,
     },
     localSimilarityScore: 48,
     hintUsageState: { usedCount: 1 },
-    previousHints: ["문자 쪽을 먼저 생각해 봐."],
+    previousHints: ["문자 쪽을 먼저 생각해 봐"],
   });
 
   assert.deepEqual(payload, {
     operation: "ai_hint",
     requestKind: "attempt",
-    answer: "훈민정음",
-    inputText: "한글",
-    category: "국어",
+    answer: "정답예시",
+    inputText: "사과",
+    category: "과일",
     highestGuess: {
-      text: "훈민정음 해례본",
+      text: "정답예시 후보",
       proximityScore: 72,
     },
     localSimilarity: 48,
     hintUsageState: { usedCount: 1 },
-    previousHints: ["문자 쪽을 먼저 생각해 봐."],
+    previousHints: ["문자 쪽을 먼저 생각해 봐"],
   });
 });
 
 test("buildLambdaPayload still accepts the legacy similarity feedback operation", () => {
   const payload = buildLambdaPayload("similarity_feedback", {
-    hiddenAnswer: "훈민정음",
-    userInput: "한글",
-    hiddenCategory: "국어",
+    hiddenAnswer: "정답예시",
+    userInput: "사과",
+    hiddenCategory: "과일",
   });
 
   assert.deepEqual(payload, {
     operation: "ai_hint",
     requestKind: "attempt",
-    answer: "훈민정음",
-    inputText: "한글",
-    category: "국어",
+    answer: "정답예시",
+    inputText: "사과",
+    category: "과일",
     highestGuess: null,
     localSimilarity: 0,
     hintUsageState: { usedCount: 0 },
@@ -55,68 +55,26 @@ test("buildLambdaPayload still accepts the legacy similarity feedback operation"
 
 test("buildLambdaPayload normalizes question answer payloads", () => {
   const payload = buildLambdaPayload("question_answer", {
-    hiddenAnswer: "훈민정음",
-    userInput: "생물이야?",
-    hiddenCategory: "국어",
+    hiddenAnswer: "오토스케일링",
+    userInput: "먹을 수 있는 거야?",
+    hiddenCategory: "클라우드",
   });
 
   assert.deepEqual(payload, {
     operation: "question_answer",
-    answer: "훈민정음",
-    question: "생물이야?",
-    category: "국어",
+    hiddenAnswer: "오토스케일링",
+    userQuestion: "먹을 수 있는 거야?",
   });
 });
 
-test("buildLambdaPayload normalizes word judge payloads", () => {
-  const payload = buildLambdaPayload("word_judge", {
-    hiddenAnswer: "훈민정음",
-    userInput: "사람이 만들었어?",
-    hiddenCategory: "국어",
+test("buildLambdaPayload keeps raw ai lab input untouched", () => {
+  const payload = buildLambdaPayload("raw_prompt_lab", {
+    input: "이 프롬프트를 그대로 보내",
   });
 
   assert.deepEqual(payload, {
-    operation: "word_judge",
-    answer: "훈민정음",
-    question: "사람이 만들었어?",
-    category: "국어",
-  });
-});
-
-test("buildLambdaPayload normalizes word reply payloads", () => {
-  const payload = buildLambdaPayload("word_reply", {
-    analysis: {
-      inputType: "property_question",
-      questionQuality: "good",
-      mood: "impressed",
-    },
-    judge: {
-      verdict: "O",
-      confidence: 0.9,
-      reasonType: "binary_judgment",
-    },
-    safeContext: {
-      replyMode: "affirm",
-      mentionableSubject: "사람이 만든 것",
-    },
-  });
-
-  assert.deepEqual(payload, {
-    operation: "word_reply",
-    analysis: {
-      inputType: "property_question",
-      questionQuality: "good",
-      mood: "impressed",
-    },
-    judge: {
-      verdict: "O",
-      confidence: 0.9,
-      reasonType: "binary_judgment",
-    },
-    safeContext: {
-      replyMode: "affirm",
-      mentionableSubject: "사람이 만든 것",
-    },
+    operation: "raw_prompt_lab",
+    input: "이 프롬프트를 그대로 보내",
   });
 });
 

@@ -29,6 +29,8 @@ const VERDICT_SCORE_MAP = {
   X: 20,
   "?": 45,
 };
+const MAX_AI_ATTEMPTS = 3;
+const RETRY_EXHAUSTED_MESSAGE = "나 지금 머리가 좀 아파. 다시 질문해줘..";
 
 function compactText(value) {
   return String(value || "")
@@ -83,6 +85,33 @@ function normalizeIntensity(value) {
   return Math.max(0, Math.min(1, numeric));
 }
 
+function hasQuestionAnswerFields(raw) {
+  return Boolean(
+    raw
+      && typeof raw === "object"
+      && trimText(raw.chatReply || raw.message, 200)
+      && trimText(raw.characterLine || raw.friendReply || raw.reactionLine, 200)
+      && trimText(raw.innerThought, 220)
+      && VALID_VERDICTS.has(String(raw.verdict || raw.tag || raw.answer || "").trim())
+      && trimText(raw.emotion || raw.reactionEmoji, 16),
+  );
+}
+
+async function invokeWithRetries(invoke, validate) {
+  for (let attempt = 1; attempt <= MAX_AI_ATTEMPTS; attempt += 1) {
+    try {
+      const raw = await invoke();
+      if (validate(raw)) {
+        return raw;
+      }
+    } catch (_error) {
+      // Treat every Lambda/network/shape failure the same and retry.
+    }
+  }
+
+  return null;
+}
+
 function hasAnswerLeak(value, hiddenAnswer) {
   const compactValue = compactText(value);
   const compactAnswer = compactText(hiddenAnswer);
@@ -94,13 +123,106 @@ function hasAnswerLeak(value, hiddenAnswer) {
   return compactValue.includes(compactAnswer);
 }
 
-function sanitizeMentionableSubject(value, hiddenAnswer) {
-  const trimmed = trimText(value, 80);
-  if (!trimmed || hasAnswerLeak(trimmed, hiddenAnswer)) {
+function hasWordTurnAnswerLeak(wordTurn, hiddenAnswer) {
+  if (!wordTurn || typeof wordTurn !== "object") {
+    return false;
+  }
+
+  return [
+    wordTurn.chatReply,
+    wordTurn.characterLine,
+    wordTurn.friendReply,
+    wordTurn.innerThought,
+  ].some((value) => hasAnswerLeak(value, hiddenAnswer));
+}
+
+function mapMoodFromVerdict(verdict) {
+  if (verdict === "O") {
+    return "impressed";
+  }
+
+  if (verdict === "X") {
+    return "teasing";
+  }
+
+  return "confused";
+}
+
+function mapReplyModeFromVerdict(verdict) {
+  if (verdict === "O") {
+    return "affirm";
+  }
+
+  if (verdict === "X") {
+    return "deny";
+  }
+
+  return "ambiguous";
+}
+
+function mapEmojiKeyFromEmoji(emoji, fallback = "neutral") {
+  const normalized = trimText(emoji, 16);
+  const table = {
+    "🙂": "neutral",
+    "😄": "smile",
+    "😅": "smile",
+    "😏": "tease",
+    "🙄": "tease",
+    "🤔": "thinking",
+    "😵": "confused",
+    "😳": "impressed",
+    "🧐": "suspicious",
+    "🤯": "shock",
+  };
+
+  return table[normalized] || fallback;
+}
+
+function normalizeQuestionAnswerTurn(raw) {
+  if (!hasQuestionAnswerFields(raw)) {
     return null;
   }
 
-  return trimmed;
+  const verdict = normalizeVerdict(String(raw.verdict || raw.tag || raw.answer || "").trim());
+  const chatReply = trimText(raw.chatReply || raw.message, 200);
+  const characterLine = trimText(raw.characterLine || raw.friendReply || raw.reactionLine, 200);
+  const innerThought = trimText(raw.innerThought, 220);
+  const rawEmoji = trimText(raw.emotion || raw.reactionEmoji, 16);
+
+  if (!chatReply || !characterLine || !innerThought || !rawEmoji) {
+    return null;
+  }
+
+  const mood = mapMoodFromVerdict(verdict);
+  const fallbackEmotion = buildDefaultEmotion(mood, verdict, "okay");
+  const emojiKey = mapEmojiKeyFromEmoji(rawEmoji, fallbackEmotion.emojiKey);
+
+  return {
+    analysis: {
+      inputType: "property_question",
+      questionQuality: "okay",
+      mood,
+    },
+    judge: {
+      verdict,
+      confidence: verdict === "?" ? 0.45 : 0.85,
+      reasonType: verdict === "?" ? "non_binary_question" : "binary_judgment",
+    },
+    safeContext: {
+      replyMode: mapReplyModeFromVerdict(verdict),
+      mentionableSubject: null,
+    },
+    chatReply,
+    friendReply: characterLine,
+    characterLine,
+    emotion: {
+      emojiKey,
+      label: fallbackEmotion.label,
+      intensity: fallbackEmotion.intensity,
+      emoji: rawEmoji,
+    },
+    innerThought,
+  };
 }
 
 function buildDefaultEmotion(mood, verdict, questionQuality = "okay") {
@@ -155,133 +277,6 @@ function mapEmotionToLegacyState(emojiKey) {
   }
 }
 
-function buildFallbackFriendReply(analysis, judge) {
-  const mood = normalizeMood(analysis?.mood);
-  const inputType = normalizeInputType(analysis?.inputType);
-  const reasonType = normalizeReasonType(judge?.reasonType);
-
-  if (inputType === "direct_guess") {
-    return "ㅋㅋ 그건 질문이라기보다 그냥 찌르기잖아.";
-  }
-
-  if (inputType === "answer_request") {
-    return "그걸 여기서 바로 까면 게임이 아니지.";
-  }
-
-  if (reasonType === "ambiguous_truth") {
-    return "이건 내가 대충 끊어서 말하면 오히려 이상해져.";
-  }
-
-  if (mood === "impressed") {
-    return "오, 그건 제법 잘 들어온 질문인데?";
-  }
-
-  if (mood === "teasing") {
-    return "너 방금 좀 대충 던졌지? 티 난다.";
-  }
-
-  if (mood === "suspicious") {
-    return "음, 방금은 좀 노골적으로 찔렀다.";
-  }
-
-  if (mood === "confused") {
-    return "기준이 흐려서 내가 바로 끊어 말하긴 어렵다.";
-  }
-
-  return "좋아, 그렇게 하나씩 좁혀 가면 된다.";
-}
-
-function buildFallbackInnerThought(analysis, judge) {
-  const inputType = normalizeInputType(analysis?.inputType);
-  const quality = normalizeQuestionQuality(analysis?.questionQuality);
-  const reasonType = normalizeReasonType(judge?.reasonType);
-
-  if (inputType === "direct_guess") {
-    return "이건 속성을 묻는 질문이 아니라 정답 후보를 직접 던진 것이다.";
-  }
-
-  if (inputType === "answer_request") {
-    return "게임 규칙을 건너뛰고 정답 공개를 요구한 입력이다.";
-  }
-
-  if (inputType === "unclear") {
-    return "무슨 기준을 묻는지 흐려서 안정적인 판정이 어렵다.";
-  }
-
-  if (reasonType === "ambiguous_truth") {
-    return "질문은 유효하지만 정의 기준에 따라 답이 갈릴 수 있다.";
-  }
-
-  const qualityMap = {
-    bad: "질문 방향이 거칠고 정보량이 적다.",
-    weak: "나쁘진 않지만 범위를 줄이는 힘은 아직 약하다.",
-    okay: "무난하다. 다음 질문에서 기준을 더 선명하게 잡으면 좋다.",
-    good: "좋은 질문이다. 정답의 성격을 꽤 효율적으로 좁힌다.",
-    excellent: "아주 날카롭다. 핵심 속성을 잘 건드렸다.",
-  };
-
-  return qualityMap[quality] || qualityMap.okay;
-}
-
-function buildFallbackChatReply(judgeFrame) {
-  const { judge, safeContext } = judgeFrame;
-  const replyMode = normalizeReplyMode(safeContext?.replyMode);
-  const subject = trimText(safeContext?.mentionableSubject, 48);
-
-  if (replyMode === "affirm") {
-    return subject ? `응, ${subject} 쪽이 맞아.` : "응, 맞아.";
-  }
-
-  if (replyMode === "deny") {
-    return subject ? `아니, ${subject} 쪽은 아니야.` : "아니, 그건 아니야.";
-  }
-
-  if (replyMode === "ambiguous") {
-    return subject ? `그건 ${subject}라고 딱 잘라 말하긴 애매해.` : "그건 좀 애매해.";
-  }
-
-  if (replyMode === "reject_guess") {
-    return "그건 질문이라기보다 정답 찍기잖아.";
-  }
-
-  if (replyMode === "reject_answer_request") {
-    return "정답 자체는 말 못 해. 질문으로 와.";
-  }
-
-  if (normalizeReasonType(judge?.reasonType) === "ambiguous_truth") {
-    return "그건 기준에 따라 답이 갈릴 수 있어.";
-  }
-
-  return "그 말은 판정하기가 좀 애매해. 다시 질문해줘.";
-}
-
-function buildWordReplyFallback(judgeFrame) {
-  const analysis = judgeFrame.analysis || {};
-  const judge = judgeFrame.judge || {};
-  const emotion = buildDefaultEmotion(analysis.mood, judge.verdict, analysis.questionQuality);
-
-  return {
-    analysis: {
-      inputType: normalizeInputType(analysis.inputType),
-      questionQuality: normalizeQuestionQuality(analysis.questionQuality),
-      mood: normalizeMood(analysis.mood),
-    },
-    judge: {
-      verdict: normalizeVerdict(judge.verdict),
-      confidence: normalizeConfidence(judge.confidence),
-      reasonType: normalizeReasonType(judge.reasonType),
-    },
-    safeContext: {
-      replyMode: normalizeReplyMode(judgeFrame.safeContext?.replyMode),
-      mentionableSubject: trimText(judgeFrame.safeContext?.mentionableSubject, 80) || null,
-    },
-    chatReply: buildFallbackChatReply(judgeFrame),
-    friendReply: buildFallbackFriendReply(analysis, judge),
-    emotion,
-    innerThought: buildFallbackInnerThought(analysis, judge),
-  };
-}
-
 function buildTransientFailureTurn() {
   return {
     analysis: {
@@ -298,99 +293,17 @@ function buildTransientFailureTurn() {
       replyMode: "unclear",
       mentionableSubject: null,
     },
-    chatReply: "잠깐만, 지금 판정기가 삐끗했어. 같은 질문 한 번만 다시 던져줘.",
-    friendReply: "이번 건 네 탓 아니다. 내가 방금 잠깐 꼬였다.",
+    chatReply: RETRY_EXHAUSTED_MESSAGE,
+    friendReply: RETRY_EXHAUSTED_MESSAGE,
+    characterLine: RETRY_EXHAUSTED_MESSAGE,
     emotion: {
       emojiKey: "confused",
-      label: "오류",
+      label: "재시도 종료",
       intensity: 0.64,
+      emoji: "😵",
     },
-    innerThought: "이번 입력은 처리 실패로 기록하지 않았다.",
+    innerThought: "세 번 다시 생각해봤는데도 답이 안 섰다. 다시 질문을 받아야 한다.",
   };
-}
-
-function normalizeWordJudgeResult(raw, hiddenAnswer) {
-  if (!raw || typeof raw !== "object") {
-    return null;
-  }
-
-  const analysis = raw.analysis && typeof raw.analysis === "object" ? raw.analysis : {};
-  const judge = raw.judge && typeof raw.judge === "object" ? raw.judge : {};
-  const safeContext = raw.safeContext && typeof raw.safeContext === "object" ? raw.safeContext : {};
-
-  const normalized = {
-    analysis: {
-      inputType: normalizeInputType(String(analysis.inputType || "").trim()),
-      questionQuality: normalizeQuestionQuality(String(analysis.questionQuality || "").trim()),
-      mood: normalizeMood(String(analysis.mood || "").trim()),
-    },
-    judge: {
-      verdict: normalizeVerdict(String(judge.verdict || "").trim()),
-      confidence: normalizeConfidence(judge.confidence),
-      reasonType: normalizeReasonType(String(judge.reasonType || "").trim()),
-    },
-    safeContext: {
-      replyMode: normalizeReplyMode(String(safeContext.replyMode || "").trim()),
-      mentionableSubject: sanitizeMentionableSubject(safeContext.mentionableSubject, hiddenAnswer),
-    },
-  };
-
-  if (normalized.analysis.inputType === "direct_guess") {
-    normalized.judge.verdict = "?";
-    normalized.judge.reasonType = "non_binary_question";
-    normalized.safeContext.replyMode = "reject_guess";
-  } else if (normalized.analysis.inputType === "answer_request") {
-    normalized.judge.verdict = "?";
-    normalized.judge.reasonType = "non_binary_question";
-    normalized.safeContext.replyMode = "reject_answer_request";
-  }
-
-  return normalized;
-}
-
-function normalizeWordReplyResult(raw, judgeFrame) {
-  if (!raw || typeof raw !== "object") {
-    return null;
-  }
-
-  const emotion = raw.emotion && typeof raw.emotion === "object" ? raw.emotion : {};
-  const analysis = judgeFrame.analysis || {};
-  const judge = judgeFrame.judge || {};
-  const safeContext = judgeFrame.safeContext || {};
-  const fallbackEmotion = buildDefaultEmotion(analysis.mood, judge.verdict, analysis.questionQuality);
-  const emojiKey = VALID_EMOJI_KEYS.has(String(emotion.emojiKey || "").trim())
-    ? String(emotion.emojiKey || "").trim()
-    : fallbackEmotion.emojiKey;
-  const normalized = {
-    analysis: {
-      inputType: normalizeInputType(analysis.inputType),
-      questionQuality: normalizeQuestionQuality(analysis.questionQuality),
-      mood: normalizeMood(analysis.mood),
-    },
-    judge: {
-      verdict: normalizeVerdict(judge.verdict),
-      confidence: normalizeConfidence(judge.confidence),
-      reasonType: normalizeReasonType(judge.reasonType),
-    },
-    safeContext: {
-      replyMode: normalizeReplyMode(safeContext.replyMode),
-      mentionableSubject: safeContext.mentionableSubject || null,
-    },
-    chatReply: trimText(raw.chatReply, 200),
-    friendReply: trimText(raw.friendReply, 200),
-    emotion: {
-      emojiKey,
-      label: trimText(emotion.label, 32) || fallbackEmotion.label,
-      intensity: normalizeIntensity(emotion.intensity ?? fallbackEmotion.intensity),
-    },
-    innerThought: trimText(raw.innerThought, 220),
-  };
-
-  if (!normalized.chatReply || !normalized.friendReply || !normalized.innerThought) {
-    return null;
-  }
-
-  return normalized;
 }
 
 function normalizeStoredWordTurn(value) {
@@ -411,6 +324,7 @@ function normalizeStoredWordTurn(value) {
   const emojiKey = VALID_EMOJI_KEYS.has(String(emotion.emojiKey || "").trim())
     ? String(emotion.emojiKey || "").trim()
     : fallbackEmotion.emojiKey;
+  const characterLine = trimText(raw.characterLine || raw.friendReply, 200);
 
   if (!trimText(raw.chatReply, 200)) {
     return null;
@@ -432,11 +346,13 @@ function normalizeStoredWordTurn(value) {
       mentionableSubject: trimText(safeContext.mentionableSubject, 80) || null,
     },
     chatReply: trimText(raw.chatReply, 200),
-    friendReply: trimText(raw.friendReply, 200),
+    friendReply: characterLine,
+    characterLine,
     emotion: {
       emojiKey,
       label: trimText(emotion.label, 32) || fallbackEmotion.label,
       intensity: normalizeIntensity(emotion.intensity ?? fallbackEmotion.intensity),
+      emoji: trimText(emotion.emoji, 16) || null,
     },
     innerThought: trimText(raw.innerThought, 220),
   };
@@ -574,16 +490,28 @@ function createWordTurnService({
 
   async function submitAttempt({ challenge, auth, inputText, model = "nova" }) {
     const { attemptId, attemptIndex, participant } = await reserveAttempt({ challenge, auth, inputText });
+    const finalizedTurn = await invokeWithRetries(
+      async () => {
+        const questionAnswerRaw = await requestLambdaOperation("question_answer", {
+          hiddenAnswer: challenge.hiddenAnswerText,
+          userQuestion: inputText,
+        }, model);
 
-    const judgeRaw = await requestLambdaOperation("word_judge", {
-      hiddenAnswer: challenge.hiddenAnswerText,
-      hiddenCategory: challenge.category.name,
-      userInput: inputText,
-    }, model);
-    const judgeFrame =
-      judgeRaw?.error ? null : normalizeWordJudgeResult(judgeRaw, challenge.hiddenAnswerText);
+        if (questionAnswerRaw?.error || !hasQuestionAnswerFields(questionAnswerRaw)) {
+          return null;
+        }
 
-    if (!judgeFrame) {
+        const normalizedTurn = normalizeQuestionAnswerTurn(questionAnswerRaw);
+        if (!normalizedTurn || hasWordTurnAnswerLeak(normalizedTurn, challenge.hiddenAnswerText)) {
+          return null;
+        }
+
+        return normalizedTurn;
+      },
+      Boolean,
+    );
+
+    if (!finalizedTurn) {
       await dropPendingAttempt(attemptId);
       return {
         transientFailure: true,
@@ -591,15 +519,6 @@ function createWordTurnService({
         snapshot: await buildWordSnapshot(auth.user.id),
       };
     }
-
-    const replyRaw = await requestLambdaOperation("word_reply", {
-      analysis: judgeFrame.analysis,
-      judge: judgeFrame.judge,
-      safeContext: judgeFrame.safeContext,
-    }, model);
-    const wordTurn =
-      replyRaw?.error ? null : normalizeWordReplyResult(replyRaw, judgeFrame);
-    const finalizedTurn = wordTurn || buildWordReplyFallback(judgeFrame);
 
     const attempt = await persistCompletedAttempt({
       attemptId,
@@ -626,17 +545,14 @@ function createWordTurnService({
 module.exports = {
   VERDICT_SCORE_MAP,
   buildTransientFailureTurn,
-  buildWordReplyFallback,
   createWordTurnService,
   mapEmotionToLegacyState,
+  normalizeQuestionAnswerTurn,
   normalizeStoredWordTurn,
-  normalizeWordJudgeResult,
-  normalizeWordReplyResult,
   __private: {
     buildDefaultEmotion,
-    buildFallbackChatReply,
-    buildFallbackFriendReply,
-    buildFallbackInnerThought,
-    sanitizeMentionableSubject,
+    hasQuestionAnswerFields,
+    hasWordTurnAnswerLeak,
+    mapEmojiKeyFromEmoji,
   },
 };

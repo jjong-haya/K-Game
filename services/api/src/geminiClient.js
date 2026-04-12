@@ -34,8 +34,7 @@ async function answerQuestion(hiddenWord, question, category, selectedModel = "n
     const { requestLambdaOperation } = require("./lambdaClient");
     const lambdaResult = await requestLambdaOperation("question_answer", {
       hiddenAnswer: hiddenWord,
-      userInput: question,
-      hiddenCategory: category,
+      userQuestion: question,
     }, selectedModel);
 
     if (!lambdaResult || lambdaResult.error) {
@@ -45,13 +44,13 @@ async function answerQuestion(hiddenWord, question, category, selectedModel = "n
       };
     }
 
-    const tag = (lambdaResult.tag || lambdaResult.answer || "").toString().trim();
-    const message = (lambdaResult.message || "").toString().trim();
-    const reactionLine = (lambdaResult.reactionLine || lambdaResult.sideMessage || "").toString().trim();
+    const tag = (lambdaResult.verdict || lambdaResult.tag || lambdaResult.answer || "").toString().trim();
+    const message = (lambdaResult.chatReply || lambdaResult.message || "").toString().trim();
+    const reactionLine = (lambdaResult.characterLine || lambdaResult.reactionLine || lambdaResult.sideMessage || "").toString().trim();
     const reactionState = (lambdaResult.reactionState || lambdaResult.expressionState || "").toString().trim();
-    const reactionEmoji = (lambdaResult.reactionEmoji || lambdaResult.expressionEmoji || "").toString().trim();
+    const reactionEmoji = (lambdaResult.emotion || lambdaResult.reactionEmoji || lambdaResult.expressionEmoji || "").toString().trim();
     const reactionLabel = (lambdaResult.reactionLabel || lambdaResult.expressionLabel || "").toString().trim();
-    const reasonType = (lambdaResult.reasonType || "").toString().trim();
+    const reasonType = (lambdaResult.reasonType || (tag === "?" ? "non_binary_question" : "binary_judgment")).toString().trim();
 
     if (["O", "X", "?"].includes(tag) && message) {
       return {

@@ -23,8 +23,8 @@ const config = {
   port: Number(process.env.PORT || 4000),
   corsOrigin:
     process.env.CORS_ORIGIN ||
-    "http://localhost:3000,http://127.0.0.1:3000",
-  timezone: "Asia/Seoul",
+    "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173",
+  timezone: process.env.APP_TIMEZONE || "Asia/Seoul",
   supabaseUrl: process.env.SUPABASE_URL || "",
   admin: {
     emails: parseCsv(process.env.ADMIN_EMAILS),
@@ -36,30 +36,15 @@ const config = {
       firstNonEmpty(process.env.GAME_LAMBDA_NOVA_URL, process.env.GAME_LAMBDA_URL),
       defaultLambdaRegion,
     ),
-    wordJudge: lambdaConfig(
-      process.env.WORD_JUDGE_FUNCTION_NAME,
-      process.env.WORD_JUDGE_URL,
-      process.env.WORD_JUDGE_REGION || defaultLambdaRegion,
-    ),
-    wordJudgeGemini: lambdaConfig(
-      process.env.WORD_JUDGE_GEMINI_FUNCTION_NAME,
-      process.env.WORD_JUDGE_GEMINI_URL,
-      process.env.WORD_JUDGE_GEMINI_REGION || process.env.WORD_JUDGE_REGION || defaultLambdaRegion,
-    ),
-    wordReply: lambdaConfig(
-      process.env.WORD_REPLY_FUNCTION_NAME,
-      process.env.WORD_REPLY_URL,
-      process.env.WORD_REPLY_REGION || defaultLambdaRegion,
-    ),
-    wordReplyGemini: lambdaConfig(
-      process.env.WORD_REPLY_GEMINI_FUNCTION_NAME,
-      process.env.WORD_REPLY_GEMINI_URL,
-      process.env.WORD_REPLY_GEMINI_REGION || process.env.WORD_REPLY_REGION || defaultLambdaRegion,
-    ),
     wordHint: lambdaConfig(
       firstNonEmpty(process.env.WORD_HINT_FUNCTION_NAME, process.env.GAME_LAMBDA_HINT_FUNCTION_NAME),
       firstNonEmpty(process.env.WORD_HINT_URL, process.env.GAME_LAMBDA_HINT_URL),
       process.env.WORD_HINT_REGION || process.env.GAME_LAMBDA_HINT_REGION || defaultLambdaRegion,
+    ),
+    dailyWordGenerate: lambdaConfig(
+      process.env.DAILY_WORD_GENERATE_FUNCTION_NAME,
+      process.env.DAILY_WORD_GENERATE_URL,
+      process.env.DAILY_WORD_GENERATE_REGION || defaultLambdaRegion,
     ),
     gemini: lambdaConfig(
       process.env.GAME_LAMBDA_GEMINI_FUNCTION_NAME,

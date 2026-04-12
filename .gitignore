@@ -42,8 +42,6 @@ bedrock-lambda/
 deploy/
 game-lambda/
 server/
-word-judge-lambda/
-word-reply-lambda/
 gemini-lambda/
 
 # Terraform local state

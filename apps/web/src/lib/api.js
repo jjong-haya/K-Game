@@ -7,17 +7,35 @@ function unique(list) {
   return [...new Set(list.filter(Boolean))];
 }
 
+function getPreferredLocalBase() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  const host = window.location.hostname;
+  if (host === "127.0.0.1") {
+    return "http://127.0.0.1:4000";
+  }
+
+  if (host === "localhost") {
+    return "http://localhost:4000";
+  }
+
+  return "";
+}
+
 function getApiBaseCandidates() {
   const configured = (process.env.REACT_APP_API_BASE_URL || "")
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
 
+  const preferredLocalBase = getPreferredLocalBase();
   if (configured.length) {
-    return unique(configured);
+    return unique([preferredLocalBase, ...configured]);
   }
 
-  return LOCAL_API_BASES;
+  return unique([preferredLocalBase, ...LOCAL_API_BASES]);
 }
 
 export class ApiError extends Error {
@@ -35,39 +53,39 @@ function getPublicErrorMessage(status, fallbackMessage = "") {
   }
 
   if (status === 401) {
-    return "로그인이 필요하거나 세션이 만료되었습니다. 다시 로그인해 주세요.";
+    return fallbackMessage || "로그인이 필요하거나 세션이 만료됐습니다. 다시 로그인해 주세요.";
   }
 
   if (status === 403) {
-    return "이 작업을 수행할 권한이 없습니다.";
+    return fallbackMessage || "이 작업을 수행할 권한이 없습니다.";
   }
 
   if (status === 404) {
-    return "요청한 정보를 찾지 못했습니다.";
+    return fallbackMessage || "요청한 정보를 찾지 못했습니다.";
   }
 
   if (status === 409) {
-    return "지금은 이 요청을 처리할 수 없습니다. 잠시 뒤 다시 시도해 주세요.";
+    return fallbackMessage || "지금 요청은 바로 처리할 수 없습니다. 안내 문구를 확인해 주세요.";
   }
 
   if (status === 422) {
-    return "입력값을 다시 확인해 주세요.";
+    return fallbackMessage || "입력값을 다시 확인해 주세요.";
   }
 
   if (status === 429) {
-    return "요청이 너무 많습니다. 잠시 뒤 다시 시도해 주세요.";
+    return fallbackMessage || "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.";
   }
 
   if (status >= 500) {
-    return "서버에서 요청을 처리하지 못했습니다. 잠시 뒤 다시 시도해 주세요.";
+    return fallbackMessage || "서버에서 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";
   }
 
-  return fallbackMessage || "요청을 처리하지 못했습니다. 잠시 뒤 다시 시도해 주세요.";
+  return fallbackMessage || "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 }
 
 async function request(path, options = {}, headers = {}) {
   const bases = getApiBaseCandidates();
-  let response;
+  let response = null;
   let lastNetworkError = null;
 
   for (const base of bases) {
@@ -85,26 +103,13 @@ async function request(path, options = {}, headers = {}) {
           ...(options.headers || {}),
         },
       });
-
-      if ([502, 503, 504].includes(response.status)) {
-        lastNetworkError = new ApiError(
-          "서버에 일시적으로 연결하지 못했습니다. 잠시 뒤 다시 시도해 주세요.",
-          response.status,
-          {
-            base,
-            reason: `upstream_${response.status}`,
-          },
-        );
-        continue;
-      }
-
       break;
     } catch (error) {
       const isAbortError = error?.name === "AbortError";
       lastNetworkError = new ApiError(
         isAbortError
-          ? "서버 응답 시간이 너무 오래 걸렸습니다. 잠시 뒤 다시 시도해 주세요."
-          : "네트워크 연결을 확인한 뒤 다시 시도해 주세요.",
+          ? "서버 응답 시간이 너무 오래 걸렸습니다. 잠시 후 다시 시도해 주세요."
+          : "서버 연결을 확인한 뒤 다시 시도해 주세요.",
         0,
         {
           base,
@@ -117,7 +122,7 @@ async function request(path, options = {}, headers = {}) {
   }
 
   if (!response) {
-    throw lastNetworkError || new ApiError("네트워크 연결을 확인한 뒤 다시 시도해 주세요.", 0, {
+    throw lastNetworkError || new ApiError("서버 연결을 확인한 뒤 다시 시도해 주세요.", 0, {
       reason: "network_error",
     });
   }
@@ -161,13 +166,13 @@ function normalizeSessionLike(session = {}) {
 
 function withSessionHeaders(session = {}) {
   const normalized = normalizeSessionLike(session);
-  const headers = {};
+  const resolvedHeaders = {};
 
   if (normalized.token && normalized.token !== COOKIE_SESSION_SENTINEL) {
-    headers.Authorization = `Bearer ${normalized.token}`;
+    resolvedHeaders.Authorization = `Bearer ${normalized.token}`;
   }
 
-  return headers;
+  return resolvedHeaders;
 }
 
 export function fetchCategories() {
@@ -191,8 +196,8 @@ export function loginWithCredentials(payload) {
 export function exchangeSocialAuthSession(payload, extraHeaders = {}) {
   const headers = {};
   if (
-    extraHeaders.currentGuestSessionToken &&
-    extraHeaders.currentGuestSessionToken !== COOKIE_SESSION_SENTINEL
+    extraHeaders.currentGuestSessionToken
+    && extraHeaders.currentGuestSessionToken !== COOKIE_SESSION_SENTINEL
   ) {
     headers["x-current-guest-token"] = extraHeaders.currentGuestSessionToken;
   }

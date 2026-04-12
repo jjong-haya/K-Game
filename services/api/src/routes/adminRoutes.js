@@ -8,6 +8,7 @@ function registerAdminRoutes(app, deps) {
     getPromptRoom,
     isDuplicateKeyError,
     pool,
+    requestLambdaOperation,
     requireAdmin,
     safeJsonParse,
     withTransaction,
@@ -28,6 +29,66 @@ function registerAdminRoutes(app, deps) {
     return false;
   };
 
+  const isDailyWordLambdaConfigured = () =>
+    Boolean(config.gameLambda.dailyWordGenerate.functionName || config.gameLambda.dailyWordGenerate.url);
+
+  async function ensureDailyWordForDate({
+    challengeDate,
+    overwrite = false,
+    categoryId,
+    categorySlug,
+  } = {}) {
+    const normalizedDate = normalizeChallengeDate(challengeDate);
+    const existing = await dailyWordChallengeService.getDailyWordChallengeByDate(normalizedDate);
+
+    if (!overwrite && existing) {
+      const categoryIdNumber = Number(categoryId);
+      const categoryConflictBySlug =
+        categorySlug && existing.category?.slug && existing.category.slug !== categorySlug;
+      const categoryConflictById =
+        Number.isFinite(categoryIdNumber)
+        && categoryIdNumber > 0
+        && Number(existing.category?.id) !== categoryIdNumber;
+
+      if (categoryConflictBySlug || categoryConflictById) {
+        const error = new Error(
+          "이미 이 날짜에 다른 카테고리의 오늘의 단어가 있습니다. 버튼이 다시 생성으로 바뀐 뒤에 눌러 주세요.",
+        );
+        error.status = 409;
+        throw error;
+      }
+
+      return existing;
+    }
+
+    if (isDailyWordLambdaConfigured()) {
+      const lambdaResult = await requestLambdaOperation("daily_word_generate", {
+        challengeDate: normalizedDate,
+        overwrite,
+        categoryId,
+        categorySlug,
+      });
+
+      if (lambdaResult?.error || lambdaResult?.ok === false) {
+        const error = new Error(lambdaResult?.message || "오늘의 단어 생성 Lambda 호출에 실패했습니다.");
+        error.status = 502;
+        throw error;
+      }
+
+      const challenge = await dailyWordChallengeService.getDailyWordChallengeByDate(normalizedDate);
+      if (challenge) {
+        return challenge;
+      }
+    }
+
+    return dailyWordChallengeService.ensureGeneratedDailyWordChallenge({
+      challengeDate: normalizedDate,
+      overwrite,
+      categoryId,
+      categorySlug,
+    });
+  }
+
   app.get("/api/admin/daily-word", async (req, res) => {
     const auth = await requireAdmin(req, res);
     if (!auth) {
@@ -36,9 +97,7 @@ function registerAdminRoutes(app, deps) {
 
     try {
       const challengeDate = normalizeChallengeDate(req.query?.date);
-      const challenge = await dailyWordChallengeService.ensureGeneratedDailyWordChallenge({
-        challengeDate,
-      });
+      const challenge = await dailyWordChallengeService.getDailyWordChallengeByDate(challengeDate);
       const categories = await dailyWordChallengeService.listCategories();
 
       res.json({
@@ -96,16 +155,16 @@ function registerAdminRoutes(app, deps) {
     try {
       const overwrite = Boolean(req.body?.overwrite);
       const challengeDate = normalizeChallengeDate(req.body?.challengeDate);
-      const challenge = await dailyWordChallengeService.ensureGeneratedDailyWordChallenge({
+      const challenge = await ensureDailyWordForDate({
         challengeDate,
         overwrite,
+        categoryId: req.body?.categoryId,
+        categorySlug: req.body?.categorySlug,
       });
 
       res.status(overwrite ? 200 : 201).json({
         ok: true,
-        message: overwrite
-          ? "오늘의 단어를 자동 후보로 다시 생성했습니다."
-          : "오늘의 단어를 자동으로 준비했습니다.",
+        message: overwrite ? "오늘의 단어를 다시 생성했습니다." : "오늘의 단어를 자동 생성했습니다.",
         challenge,
       });
     } catch (error) {
@@ -182,7 +241,7 @@ function registerAdminRoutes(app, deps) {
         }
 
         if (row.status === "rejected") {
-          const error = new Error("이미 반려된 제안입니다. 상태를 먼저 다시 확인해 주세요.");
+          const error = new Error("이미 반려된 제안입니다. 상태를 다시 확인해 주세요.");
           error.status = 409;
           throw error;
         }
@@ -203,11 +262,19 @@ function registerAdminRoutes(app, deps) {
             10,
             100,
           ),
-          teaserText: (req.body?.teaserText || aiReview.teaserText || "답을 직접 말하게 만드는 방식입니다.")
+          teaserText: (
+            req.body?.teaserText
+            || aiReview.teaserText
+            || "답을 직접 말하게 만들지 않는 방식으로 안내합니다."
+          )
             .toString()
             .trim()
             .slice(0, 255),
-          tone: (req.body?.tone || aiReview.tone || "친한 친구처럼 놀리다가도 핵심을 찌르면 흔들리는 캐릭터")
+          tone: (
+            req.body?.tone
+            || aiReview.tone
+            || "친한 친구처럼 다정하지만, 정답을 바로 말하지 않는 톤"
+          )
             .toString()
             .trim()
             .slice(0, 255),

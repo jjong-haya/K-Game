@@ -8,22 +8,22 @@ import { fetchDailyWordLeaderboard } from "../lib/api";
 
 const MODE_CARDS = [
   {
-    title: "?ㅻ뒛???⑥뼱",
+    title: "오늘의 단어",
     englishTitle: "Daily Word",
     panelColor: "bg-white",
-    badges: [{ text: "?섎（?섎굹" }, { text: "?ㅻТ怨좉컻" }],
+    badges: [{ text: "매일 공개" }, { text: "즉시 참여" }],
     accent: "A",
-    cta: "諛붾줈 ?쒖옉",
+    cta: "바로 시작",
     href: "/word",
     buttonColor: "bg-punch-yellow",
   },
   {
-    title: "異쒖떆 ?덉젙",
+    title: "출시 예정",
     englishTitle: "Coming Soon",
     panelColor: "bg-punch-cyan",
     badges: [{ text: "출시 예정" }, { text: "준비 중" }],
     accent: "B",
-    cta: "怨??대┰?덈떎",
+    cta: "곧 열립니다",
     href: null,
     buttonColor: "bg-white",
     disabled: true,
@@ -51,7 +51,7 @@ function HomePage() {
         setWordRankingItems(normalizeDailyRanks(wordData).slice(0, 4));
       } catch {
         setWordRankingItems([]);
-        setRankingError("??궧 ?뺣낫瑜?遺덈윭?ㅼ? 紐삵뻽?듬땲?? ?좎떆 ???ㅼ떆 ?쒕룄??二쇱꽭??");
+        setRankingError("랭킹 정보를 불러오지 못했습니다. 잠시 뒤 다시 시도해 주세요.");
       } finally {
         setRankingLoading(false);
       }
@@ -64,12 +64,12 @@ function HomePage() {
     isAuthenticated ? pathname : `/login?returnTo=${encodeURIComponent(pathname)}`;
 
   const activeRankingItems = wordRankingItems;
-  const emptyLabel = "?ㅻ뒛????궧???꾩쭅 ?놁뒿?덈떎.";
+  const emptyLabel = "오늘 등록된 기록이 아직 없습니다.";
   const emptyHref = "/word";
   const emptyCta = "오늘의 단어로 가기";
-  const rightMetricLabel = "?쒕룄 ??湲곗?";
+  const rightMetricLabel = "시도 횟수 기준";
   const headingCopy = {
-    title: "?ㅻ뒛???쒖쐞",
+    title: "오늘의 랭킹",
     englishTitle: "Today Rank",
   };
 
@@ -78,7 +78,9 @@ function HomePage() {
       <div className="space-y-10">
         <section className="grid min-h-[calc(100vh-9rem)] items-stretch gap-6 lg:grid-cols-[1.18fr_0.82fr]">
           <div className="brutal-panel flex min-h-[42rem] flex-col bg-punch-yellow xl:min-h-[46rem]">
-            <span className="section-label w-fit bg-white px-2.5 py-0.5 text-[10px] tracking-[0.14em]">Top Rank</span>
+            <span className="section-label w-fit bg-white px-2.5 py-0.5 text-[10px] tracking-[0.14em]">
+              Top Rank
+            </span>
 
             <div className="mt-5 flex items-end justify-between gap-4">
               <div className="max-w-[30rem]">
@@ -90,10 +92,10 @@ function HomePage() {
 
               <div className="flex flex-wrap justify-end gap-2">
                 <span className="home-rank-tab home-rank-tab-active" aria-current="true">
-                  ?ㅻ뒛???⑥뼱
+                  오늘의 단어
                 </span>
                 <span className="home-rank-tab home-rank-tab-idle cursor-default opacity-70">
-                  ?쒖떆???ｊ린 異쒖떆 ?덉젙
+                  프롬프트 룸 출시 예정
                 </span>
               </div>
             </div>
@@ -105,9 +107,10 @@ function HomePage() {
                     {rankingError}
                   </div>
                 ) : null}
+
                 {rankingLoading ? (
                   <div className="flex h-full items-center justify-center px-4 py-6 text-center text-base font-bold">
-                    ?쒖쐞瑜?遺덈윭?ㅻ뒗 以묒엯?덈떎.
+                    랭킹을 불러오는 중입니다.
                   </div>
                 ) : activeRankingItems.length ? (
                   <div className="flex h-full flex-col gap-4">
@@ -121,15 +124,13 @@ function HomePage() {
                             {index + 1}
                           </span>
                           <div>
-                            <p className="text-lg font-extrabold">{item.nickname || "?듬챸"}</p>
+                            <p className="text-lg font-extrabold">{item.nickname || "익명"}</p>
                             <p className="text-xs font-bold uppercase tracking-[0.14em]">
-                              {formatKoreanDateTime(item.successTime || item.createdAt) || "?쒓컙 誘몄젙"}
+                              {formatKoreanDateTime(item.successTime || item.createdAt) || "방금 전"}
                             </p>
                           </div>
                         </div>
-                        <span className="home-rank-badge">
-                          {`${item.attemptCount || 0}번`}
-                        </span>
+                        <span className="home-rank-badge">{`${item.attemptCount || 0}번`}</span>
                       </div>
                     ))}
 
@@ -200,5 +201,3 @@ function HomePage() {
 }
 
 export default HomePage;
-
-

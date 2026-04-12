@@ -11,7 +11,7 @@
 - [ ] `README.md`에 GitHub Actions 배지와 아키텍처 다이어그램이 있는지 확인
 - [ ] `docs/evaluator-guide.md`가 먼저 읽을 문서로 안내되는지 확인
 - [ ] `docs/release-checklist.md`가 최신 상태인지 확인
-- [ ] `npm run test:web`, `npm run test:api`, `npm run test:lambdas`, `npm run check:infra` 명령이 문서와 일치하는지 확인
+- [ ] `npm run build:web`, `npm run test:web`, `npm run test:api`, `npm run test:lambdas`, `npm run check:api`, `npm run check:infra` 명령이 문서와 일치하는지 확인
 
 ## 발표 전
 
@@ -19,9 +19,9 @@
 - [ ] 폴더 구조를 설명할 수 있는지 확인
 - [ ] 프론트, API, Lambda, DB의 역할 분리를 설명할 수 있는지 확인
 - [ ] 왜 S3와 CloudFront를 썼는지 설명할 수 있는지 확인
-- [ ] 왜 EC2와 RDS를 분리했는지 설명할 수 있는지 확인
+- [ ] 왜 EC2와 Lambda를 함께 썼는지 설명할 수 있는지 확인
 - [ ] 인증이 왜 세션 쿠키 기반인지 설명할 수 있는지 확인
-- [ ] 장애 시 롤백 경로를 말할 수 있는지 확인
+- [ ] 날짜가 붙은 리뷰 문서와 현재용 문서를 구분해서 설명할 수 있는지 확인
 
 ## 기술 점검
 

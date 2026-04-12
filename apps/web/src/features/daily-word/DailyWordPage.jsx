@@ -75,52 +75,6 @@ function VerdictRow({ label, count, total, colorClass }) {
     </div>
   );
 }
-
-function buildAvatarFriendReply(turn) {
-  if (!turn) {
-    return "질문을 던져 봐. 판정은 내가 깔끔하게 해줄게.";
-  }
-
-  const inputType = String(turn.analysis?.inputType || "");
-  const quality = String(turn.analysis?.questionQuality || "");
-  const mood = String(turn.analysis?.mood || "");
-  const reply = String(turn.friendReply || "").trim();
-
-  if (inputType === "direct_guess") {
-    return "야 그건 질문이 아니라 그냥 찍은 거잖아. 성의 좀 챙겨.";
-  }
-
-  if (inputType === "answer_request") {
-    return "뭘 대놓고 답 내놓으래. 양심 어디 갔냐.";
-  }
-
-  if (quality === "bad") {
-    return "야 질문을 할 거면 좀 찔러. 이건 너무 성의 없잖아.";
-  }
-
-  if (quality === "weak") {
-    return "아 좀 답답하게 돌리지 말고, 어디를 물을 건지 제대로 찔러.";
-  }
-
-  if (mood === "suspicious") {
-    return "야 너 지금 질문하는 척하면서 답만 빼먹으려는 거 티 난다.";
-  }
-
-  if (mood === "teasing") {
-    return "너 방금 너무 티 나게 던졌다. 나도 그렇게는 안 속아.";
-  }
-
-  if (mood === "impressed") {
-    return "오, 그건 좀 잘 찔렀는데? 방금은 인정.";
-  }
-
-  if (mood === "confused") {
-    return "이건 기준이 꼬여서 내가 바로 끊어 말하기가 좀 빡세다.";
-  }
-
-  return reply || "그냥 막 던지진 않았네. 이제 좀 되는 질문을 해봐.";
-}
-
 function DailyWordPage() {
   const { session, isReady } = useAuth();
   const [snapshot, setSnapshot] = useState(null);
@@ -198,7 +152,8 @@ function DailyWordPage() {
   const stats = buildWordStats(challenge, player, leaderboard);
   const recentAttempts = mapWordAttempts(player.history || challenge.recentAttempts || []);
   const latestAiHint = snapshot.hints?.best_guess_ai || "";
-  const latestTurn = getLatestWordTurn(player, transientTurn?.wordTurn);
+  const latestTurnBase = getLatestWordTurn(player, transientTurn?.wordTurn);
+  const latestTurn = latestTurnBase || null;
   const currentEmotion = transientTurn?.wordTurn?.emotion || player.currentEmotion || {
     emojiKey: "neutral",
     label: "차분",
@@ -243,8 +198,9 @@ function DailyWordPage() {
       {
         id: "pending-ai",
         role: "assistant",
-        content: "판정 중이야. 잠깐만 기다려 줘.",
+        content: "",
         meta: "...",
+        typing: true,
       },
     ]);
   }
@@ -259,8 +215,9 @@ function DailyWordPage() {
       {
         id: "pending-hint-ai",
         role: "assistant",
-        content: "힌트 정리 중이야. 금방 줄게.",
+        content: "",
         meta: "HINT",
+        typing: true,
       },
     ]);
   }
@@ -274,6 +231,7 @@ function DailyWordPage() {
     try {
       setSubmitting(true);
       setPendingAttemptText(value);
+      setInputText("");
       const updated = await submitDailyWordAttempt(session, value, selectedModel);
 
       if (updated?.transientFailure && updated?.temporaryTurn) {
@@ -291,8 +249,6 @@ function DailyWordPage() {
         setSnapshot(normalizeDailyState(updated));
         setLeaderboard(normalizeLeaderboard(updated.snapshot || updated));
       }
-
-      setInputText("");
       setError("");
     } catch (requestError) {
       setError(requestError.message || "질문을 보내지 못했습니다.");
@@ -382,7 +338,7 @@ function DailyWordPage() {
               message={
                 submitting || hintLoading
                   ? "방금 들어온 입력을 정리해서 답을 만들고 있어."
-                  : buildAvatarFriendReply(latestTurn)
+                  : (latestTurn?.friendReply || "")
               }
               userMessage={pendingAttemptText || latestTurn?.chatReply || ""}
               model={selectedModel}
@@ -397,6 +353,8 @@ function DailyWordPage() {
               collapsible
               scrollable
               maxHeightClass="max-h-[14rem]"
+              scrollbarClassName="word-scrollbar"
+              fadeScrollableEdges
               emptyText="아직 질문 기록이 없습니다. 첫 질문부터 던져 보세요."
             />
           </div>
@@ -417,11 +375,17 @@ function DailyWordPage() {
 
             <div
               ref={chatContainerRef}
-              className="brutal-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto bg-[#fff9ec] px-4 py-5 md:px-5"
+              className="word-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto bg-[#fff9ec] px-4 py-5 md:px-5"
               aria-live="polite"
             >
               {visibleConversation.map((message) => (
-                <ChatBubble key={message.id} role={message.role} content={message.content} meta={message.meta} />
+                <ChatBubble
+                  key={message.id}
+                  role={message.role}
+                  content={message.content}
+                  meta={message.meta}
+                  typing={message.typing}
+                />
               ))}
               {answerMessages.map((message) => (
                 <ChatBubble key={message.id} role={message.role} content={message.content} />
@@ -497,7 +461,7 @@ function DailyWordPage() {
                     </span>
                   </div>
                   <p className="mt-3 text-sm font-bold leading-7">
-                    {latestTurn?.innerThought || "아직 평가할 질문이 없습니다. 첫 질문부터 던져 보세요."}
+                    {latestTurn?.innerThought || ""}
                   </p>
                 </div>
 

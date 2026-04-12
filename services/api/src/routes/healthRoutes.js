@@ -9,9 +9,10 @@ function registerHealthRoutes(app, deps) {
       date: buildTodayDateString(config.timezone),
       lambdaConfigured: {
         prompt: Boolean(config.gameLambda.prompt.functionName || config.gameLambda.prompt.url),
-        wordJudge: Boolean(config.gameLambda.wordJudge.functionName || config.gameLambda.wordJudge.url),
-        wordReply: Boolean(config.gameLambda.wordReply.functionName || config.gameLambda.wordReply.url),
         wordHint: Boolean(config.gameLambda.wordHint.functionName || config.gameLambda.wordHint.url),
+        dailyWordGenerate: Boolean(
+          config.gameLambda.dailyWordGenerate.functionName || config.gameLambda.dailyWordGenerate.url,
+        ),
       },
       supabaseConfigured: Boolean(config.supabaseUrl),
       dailyWordChallengeId: daily?.id || null,

@@ -6,7 +6,7 @@ import { useAuth } from "../auth/useAuth";
 const NAV_ITEMS = [
   { to: "/", label: "홈" },
   { to: "/word", label: "오늘의 단어" },
-  { to: "/rooms", label: "출시 예정" },
+  { to: "/rooms", label: "프롬프트 룸" },
 ];
 
 function ChevronDownIcon({ isOpen }) {
@@ -70,7 +70,7 @@ function getAuthLabel(authType) {
   return "로그인됨";
 }
 
-function AccountCluster({ session, onLogout }) {
+function AccountCluster({ session, isAdmin, onLogout }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const authLabel = useMemo(() => getAuthLabel(session?.authType), [session?.authType]);
 
@@ -101,6 +101,11 @@ function AccountCluster({ session, onLogout }) {
         <Link to="/profile" className="chunky-button w-full bg-white px-3 py-2 text-xs">
           프로필
         </Link>
+        {isAdmin ? (
+          <Link to="/admin" className="chunky-button mt-2 w-full bg-punch-yellow px-3 py-2 text-xs">
+            관리자 페이지
+          </Link>
+        ) : null}
         <button
           type="button"
           onClick={onLogout}
@@ -172,8 +177,8 @@ function GuestLogoutDialog({ onCancel, onConfirm, onLinkSocial }) {
           정말 로그아웃할까요?
         </h2>
         <p id="guest-logout-description" className="mt-4 text-sm font-medium leading-7 md:text-base">
-          게스트 세션은 로그아웃하거나 브라우저를 닫으면 사라질 수 있습니다. 기록을 계속 유지하려면 먼저
-          소셜 계정으로 연동하는 편이 안전합니다.
+          게스트 세션은 로그아웃하거나 브라우저를 닫으면 사라질 수 있습니다. 기록을 계속 남기려면 먼저
+          소셜 계정으로 연결하는 편이 안전합니다.
         </p>
 
         <div className="mt-5 flex flex-wrap gap-3">
@@ -195,7 +200,7 @@ function GuestLogoutDialog({ onCancel, onConfirm, onLinkSocial }) {
           onClick={onLinkSocial}
           className="mt-6 inline-flex items-center gap-3 text-left text-sm font-bold"
         >
-          <span>기록을 유지하려면 소셜 계정을 연결해 주세요</span>
+          <span>기록을 유지하려면 소셜 계정을 먼저 연결해 주세요.</span>
           <span className="guest-warning-arrow inline-flex items-center">
             <ArrowRightIcon />
           </span>
@@ -208,7 +213,7 @@ function GuestLogoutDialog({ onCancel, onConfirm, onLinkSocial }) {
 function AppShell({ children, action = null, maxWidth = "max-w-7xl", navMode = "full" }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isReady, isAuthenticated, isGuest, session, logout } = useAuth();
+  const { isReady, isAuthenticated, isGuest, isAdmin, session, logout } = useAuth();
   const navItems = navMode === "minimal" ? [] : NAV_ITEMS;
   const [showGuestLogoutDialog, setShowGuestLogoutDialog] = useState(false);
 
@@ -260,7 +265,7 @@ function AppShell({ children, action = null, maxWidth = "max-w-7xl", navMode = "
 
           {isReady ? (
             isAuthenticated ? (
-              <AccountCluster session={session} onLogout={handleLogout} />
+              <AccountCluster session={session} isAdmin={isAdmin} onLogout={handleLogout} />
             ) : location.pathname === "/login" ? null : (
               <Link
                 to={`/login?returnTo=${encodeURIComponent(location.pathname + location.search)}`}
@@ -277,14 +282,16 @@ function AppShell({ children, action = null, maxWidth = "max-w-7xl", navMode = "
         </div>
       </header>
 
-      <main role="main" className={`mx-auto ${maxWidth} px-4 md:px-6`}>{children}</main>
+      <main role="main" className={`mx-auto ${maxWidth} px-4 md:px-6`}>
+        {children}
+      </main>
 
       <footer role="contentinfo" className={`mx-auto mt-8 ${maxWidth} px-4 pb-6 md:px-6`}>
         <div className="flex flex-col gap-4 rounded-[1.35rem] border-4 border-ink bg-white/90 px-5 py-4 shadow-brutal-sm md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink/55">Legal</p>
             <p className="mt-1 text-sm font-bold leading-6 md:text-base">
-              K-Game 이용약관과 개인정보 안내
+              K-Game 이용약관과 개인정보 처리 안내
             </p>
           </div>
 

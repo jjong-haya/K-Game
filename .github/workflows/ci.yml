@@ -49,7 +49,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [prompt-engine, prompt-hint, word-judge, word-reply]
+        service: [prompt-engine, prompt-hint, daily-word-generate]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

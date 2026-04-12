@@ -95,3 +95,57 @@ variable "log_retention_days" {
   type        = number
   default     = 30
 }
+
+variable "enable_daily_word_lambda" {
+  description = "Whether to provision the daily-word-generate Lambda."
+  type        = bool
+  default     = false
+}
+
+variable "enable_daily_word_schedule" {
+  description = "Whether to attach an EventBridge schedule to the daily-word-generate Lambda."
+  type        = bool
+  default     = false
+}
+
+variable "daily_word_lambda_name" {
+  description = "Optional explicit function name for the daily-word-generate Lambda."
+  type        = string
+  default     = ""
+}
+
+variable "daily_word_lambda_s3_bucket" {
+  description = "S3 bucket that stores the daily-word-generate deployment zip."
+  type        = string
+  default     = ""
+}
+
+variable "daily_word_lambda_s3_key" {
+  description = "S3 object key for the daily-word-generate deployment zip."
+  type        = string
+  default     = ""
+}
+
+variable "daily_word_lambda_timeout" {
+  description = "Timeout in seconds for the daily-word-generate Lambda."
+  type        = number
+  default     = 30
+}
+
+variable "daily_word_lambda_memory_size" {
+  description = "Memory size in MB for the daily-word-generate Lambda."
+  type        = number
+  default     = 512
+}
+
+variable "daily_word_bedrock_model_id" {
+  description = "Bedrock model ID used by the daily-word-generate Lambda."
+  type        = string
+  default     = "amazon.nova-lite-v1:0"
+}
+
+variable "daily_word_schedule_expression" {
+  description = "EventBridge schedule expression for daily word generation."
+  type        = string
+  default     = "cron(0 15 * * ? *)"
+}

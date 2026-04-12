@@ -30,20 +30,41 @@ npm start
 - `src/db`
   - DB 연결 진입점
 - `sql`
-  - 스키마, 마이그레이션, 개발용 샘플 데이터
+  - 스키마와 초기 데이터
 
 ## 환경 변수
 
-- `PORT`
-- `CORS_ORIGIN`
-- `DB_HOST`
-- `DB_PORT`
-- `DB_USER`
-- `DB_PASSWORD`
-- `DB_NAME`
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `SESSION_COOKIE_NAME`
+- 서버/공통
+  - `PORT`
+  - `CORS_ORIGIN`
+  - `APP_TIMEZONE`
+- DB
+  - `DB_HOST`
+  - `DB_PORT`
+  - `DB_USER`
+  - `DB_PASSWORD`
+  - `DB_NAME`
+- 관리자/인증
+  - `ADMIN_EMAILS`
+  - `ADMIN_USER_IDS`
+  - `SUPABASE_URL`
+  - `GUEST_SESSION_HOURS`
+  - `APP_SESSION_DAYS`
+  - `AUTH_COOKIE_NAME`
+  - `AUTH_COOKIE_SECURE`
+  - `AUTH_COOKIE_SAMESITE`
+- Lambda
+  - `GAME_LAMBDA_NOVA_FUNCTION_NAME`
+  - `GAME_LAMBDA_NOVA_URL`
+  - `GAME_LAMBDA_REGION`
+  - `WORD_HINT_FUNCTION_NAME`
+  - `WORD_HINT_URL`
+  - `WORD_HINT_REGION`
+  - `DAILY_WORD_GENERATE_FUNCTION_NAME`
+  - `DAILY_WORD_GENERATE_URL`
+  - `DAILY_WORD_GENERATE_REGION`
+  - `GAME_LAMBDA_GEMINI_FUNCTION_NAME`
+  - `GAME_LAMBDA_GEMINI_URL`
 
 예시는 [.env.example](./.env.example)를 참고하면 됩니다.
 
@@ -56,7 +77,7 @@ npm test
 
 ## 개발용 시드 계정
 
-고정 아이디와 비밀번호는 더 이상 코드에 포함하지 않습니다. 계정 시드는 명시적으로 활성화해야만 실행됩니다.
+고정 아이디와 비밀번호는 코드에 포함하지 않습니다. 계정 시드는 명시적으로 활성화해야만 실행됩니다.
 
 ```bash
 ENABLE_ACCOUNT_SEED=1 \

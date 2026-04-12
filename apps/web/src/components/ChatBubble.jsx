@@ -31,7 +31,7 @@ const roleConfig = {
   },
 };
 
-function ChatBubble({ role = "assistant", content, score, category, meta }) {
+function ChatBubble({ role = "assistant", content, score, category, meta, typing = false }) {
   const config = roleConfig[role] || roleConfig.assistant;
 
   return (
@@ -41,7 +41,15 @@ function ChatBubble({ role = "assistant", content, score, category, meta }) {
           <span className="text-[11px] font-bold uppercase tracking-[0.16em]">{config.label}</span>
           {meta ? <span className="text-[11px] font-bold uppercase tracking-[0.14em]">{meta}</span> : null}
         </div>
-        <p className="mt-2 whitespace-pre-wrap text-sm font-medium leading-7">{content}</p>
+        {typing ? (
+          <div className="chat-typing" aria-label="AI 응답 작성 중" role="status">
+            <span className="chat-typing-dot" />
+            <span className="chat-typing-dot" />
+            <span className="chat-typing-dot" />
+          </div>
+        ) : (
+          <p className="mt-2 whitespace-pre-wrap text-sm font-medium leading-7">{content}</p>
+        )}
       </article>
     </div>
   );

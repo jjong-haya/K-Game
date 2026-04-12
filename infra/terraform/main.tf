@@ -1,6 +1,7 @@
 locals {
   name_prefix = "${var.project_name}-${var.environment}"
   frontend_bucket = var.frontend_bucket_name != "" ? var.frontend_bucket_name : "${local.name_prefix}-frontend"
+  daily_word_lambda_name = var.daily_word_lambda_name != "" ? var.daily_word_lambda_name : "${local.name_prefix}-daily-word-generate"
 }
 
 data "aws_caller_identity" "current" {}

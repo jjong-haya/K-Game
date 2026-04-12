@@ -39,6 +39,7 @@ const {
 const { errorHandler } = require("../middleware/errorHandler");
 const { notFoundHandler } = require("../middleware/notFound");
 const { registerAdminRoutes } = require("../routes/adminRoutes");
+const { registerAiLabRoutes } = require("../routes/aiLabRoutes");
 const { registerAuthRoutes } = require("../routes/authRoutes");
 const { registerHealthRoutes } = require("../routes/healthRoutes");
 const { registerPromptRoutes } = require("../routes/promptRoutes");
@@ -54,6 +55,21 @@ function createApp({ pool }) {
     timezone: config.timezone,
   });
   app.disable("x-powered-by");
+
+  ["get", "post", "put", "patch", "delete"].forEach((method) => {
+    const original = app[method].bind(app);
+    app[method] = (path, ...handlers) =>
+      original(
+        path,
+        ...handlers.map((handler) => {
+          if (typeof handler !== "function" || handler.length >= 4) {
+            return handler;
+          }
+
+          return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
+        }),
+      );
+  });
 
   const corsOrigins =
     config.corsOrigin === "*"
@@ -186,12 +202,13 @@ function createApp({ pool }) {
     const emojiKey = String(raw.emojiKey || "").trim() || "neutral";
     const label = String(raw.label || "").trim() || "차분";
     const intensity = Number(raw.intensity);
+    const emoji = String(raw.emoji || "").trim();
 
     return {
       emojiKey,
       label,
       intensity: Number.isFinite(intensity) ? Math.max(0, Math.min(1, intensity)) : 0.45,
-      emoji: wordEmotionEmojiMap[emojiKey] || wordEmotionEmojiMap.neutral,
+      emoji: emoji || wordEmotionEmojiMap[emojiKey] || wordEmotionEmojiMap.neutral,
     };
   };
 
@@ -201,7 +218,7 @@ function createApp({ pool }) {
       reactionState: mapEmotionToLegacyState(emotion.emojiKey) || fallbackState,
       reactionEmoji: emotion.emoji,
       reactionLabel: emotion.label,
-      reactionLine: wordTurn?.friendReply || fallbackMessage,
+      reactionLine: wordTurn?.characterLine || wordTurn?.friendReply || fallbackMessage,
       tag: wordTurn?.judge?.verdict,
       reasonType: wordTurn?.judge?.reasonType,
     });
@@ -412,8 +429,31 @@ function createApp({ pool }) {
   }
 
   async function getDailyWordChallenge() {
+    const challengeDate = buildTodayDateString(config.timezone);
+    const configuredDailyWordLambda =
+      config.gameLambda.dailyWordGenerate.functionName || config.gameLambda.dailyWordGenerate.url;
+    const existing = await dailyWordChallengeService.getDailyWordChallengeByDate(challengeDate);
+
+    if (existing) {
+      return existing;
+    }
+
+    if (configuredDailyWordLambda) {
+      const lambdaResult = await requestLambdaOperation("daily_word_generate", {
+        challengeDate,
+        overwrite: false,
+      });
+
+      if (!lambdaResult?.error && lambdaResult?.ok !== false) {
+        const generated = await dailyWordChallengeService.getDailyWordChallengeByDate(challengeDate);
+        if (generated) {
+          return generated;
+        }
+      }
+    }
+
     return dailyWordChallengeService.ensureGeneratedDailyWordChallenge({
-      challengeDate: buildTodayDateString(config.timezone),
+      challengeDate,
     });
   }
 
@@ -1157,6 +1197,7 @@ function createApp({ pool }) {
   };
 
   registerHealthRoutes(app, routeDeps);
+  registerAiLabRoutes(app, routeDeps);
   registerAuthRoutes(app, routeDeps);
   registerWordRoutes(app, routeDeps);
   registerPromptRoutes(app, routeDeps);

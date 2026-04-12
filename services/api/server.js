@@ -17,12 +17,6 @@ async function bootstrap() {
         event: "server_started",
         port: config.port,
         promptLambdaConfigured: Boolean(config.gameLambda.prompt.functionName || config.gameLambda.prompt.url),
-        wordJudgeLambdaConfigured: Boolean(
-          config.gameLambda.wordJudge.functionName || config.gameLambda.wordJudge.url,
-        ),
-        wordReplyLambdaConfigured: Boolean(
-          config.gameLambda.wordReply.functionName || config.gameLambda.wordReply.url,
-        ),
         wordHintLambdaConfigured: Boolean(
           config.gameLambda.wordHint.functionName || config.gameLambda.wordHint.url,
         ),

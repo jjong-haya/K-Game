@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import ProtectedRoute from "../components/ProtectedRoute";
 import AdminPage from "../pages/AdminPage";
+import AiLabPage from "../pages/AiLabPage";
 import DailyWordPage from "../pages/DailyWordPage";
 import HomePage from "../pages/HomePage";
 import LoginPage from "../pages/LoginPage";
@@ -19,6 +20,7 @@ function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
+      <Route path="/ai-lab" element={<AiLabPage />} />
       <Route
         path="/word"
         element={

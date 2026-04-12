@@ -12,43 +12,33 @@ test("maskHiddenAnswerInMessage masks the hidden answer", () => {
   assert.equal(masked, "The hidden answer is ** and ** beans.");
 });
 
-test("normalizeQuestionAnswerOutput returns safe structured output", () => {
-  const normalized = lambda.__private.normalizeQuestionAnswerOutput(
-    {
-      answer: "X",
-      message: "coffee is not part of this answer.",
-      reasonType: "binary_judgment",
-      reactionState: "teasing_low",
-      reactionEmoji: "😒",
-      reactionLabel: "별로",
-      reactionLine: "coffee? 너무 직접적이네.",
-    },
-    "coffee",
-  );
-
-  assert.deepEqual(normalized, {
-    answer: "X",
-    tag: "X",
-    reasonType: "binary_judgment",
-    message: "** is not part of this answer.",
-    reactionState: "teasing_low",
-    reactionEmoji: "😒",
-    reactionLabel: "별로",
-    reactionLine: "**? 너무 직접적이네.",
+test("buildQuestionUserPrompt injects hiddenAnswer and userQuestion into the fixed prompt", () => {
+  const prompt = lambda.__private.buildQuestionUserPrompt({
+    hiddenAnswer: "오토스케일링",
+    userQuestion: "먹을 수 있는 거야?",
   });
+
+  assert.match(prompt, /You are the response engine for a Korean 20-questions game\./);
+  assert.match(prompt, /- hiddenAnswer: 오토스케일링/);
+  assert.match(prompt, /- userQuestion: 먹을 수 있는 거야\?/);
 });
 
-test("normalizeQuestionAnswerOutput forces the fixed non-binary message", () => {
-  const normalized = lambda.__private.normalizeQuestionAnswerOutput(
-    {
-      answer: "?",
-      message: "anything else",
-      reasonType: "non_binary_question",
-    },
-    "coffee",
-  );
+test("normalizeQuestionAnswerOutput keeps the raw single-stage fields", () => {
+  const normalized = lambda.__private.normalizeQuestionAnswerOutput({
+    chatReply: "아니, 그건 아냐. 아직 한참 멀었어.",
+    characterLine: "진짜 맞춰보려고 애쓰네. 😅",
+    innerThought: "아직 정답과는 거리가 많이 멀다.",
+    verdict: "X",
+    emotion: "🙄",
+  });
 
-  assert.equal(normalized.message, "이 질문은 게임 형식으로 답하기가 애매해요. 조금 더 분명하게 물어봐 주세요.");
+  assert.deepEqual(normalized, {
+    chatReply: "아니, 그건 아냐. 아직 한참 멀었어.",
+    characterLine: "진짜 맞춰보려고 애쓰네. 😅",
+    innerThought: "아직 정답과는 거리가 많이 멀다.",
+    verdict: "X",
+    emotion: "🙄",
+  });
 });
 
 test("handler returns HTTP 400 when operation is missing", async () => {
@@ -59,4 +49,25 @@ test("handler returns HTTP 400 when operation is missing", async () => {
 
   assert.equal(response.statusCode, 400);
   assert.equal(JSON.parse(response.body).ok, false);
+});
+
+test("normalizeRawPromptPayload keeps raw input text", () => {
+  const normalized = lambda.__private.normalizeRawPromptPayload({
+    input: "이 프롬프트를 가공 없이 그대로 보내",
+  });
+
+  assert.deepEqual(normalized, {
+    operation: "raw_prompt_lab",
+    input: "이 프롬프트를 가공 없이 그대로 보내",
+  });
+});
+
+test("handler returns HTTP 422 when raw prompt input is missing", async () => {
+  const response = await lambda.handler({
+    requestContext: { http: {} },
+    body: JSON.stringify({ operation: "raw_prompt_lab", input: "" }),
+  });
+
+  assert.equal(response.statusCode, 422);
+  assert.equal(JSON.parse(response.body).code, "missing_input");
 });

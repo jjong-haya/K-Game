@@ -162,6 +162,15 @@ function normalizeSynonyms(rawSynonyms) {
   return normalized.slice(0, 12);
 }
 
+function isDuplicateChallengeDateError(error) {
+  if (error?.code !== "ER_DUP_ENTRY" && error?.errno !== 1062) {
+    return false;
+  }
+
+  const message = String(error?.sqlMessage || error?.message || "");
+  return message.includes("daily_word_challenges.challenge_date");
+}
+
 function listsEqual(left, right) {
   if (left.length !== right.length) {
     return false;
@@ -174,9 +183,20 @@ function buildCandidateSeed(challengeDate) {
   return Number(String(challengeDate || "").replace(/-/g, "")) || 0;
 }
 
-function pickDailyWordCandidate(challengeDate) {
-  const index = buildCandidateSeed(challengeDate) % DAILY_WORD_CANDIDATES.length;
-  return DAILY_WORD_CANDIDATES[index];
+function pickDailyWordCandidate(challengeDate, categorySlug = "") {
+  const normalizedCategorySlug = trimText(categorySlug, 60);
+  const candidatePool = normalizedCategorySlug
+    ? DAILY_WORD_CANDIDATES.filter((candidate) => candidate.categorySlug === normalizedCategorySlug)
+    : DAILY_WORD_CANDIDATES;
+
+  if (!candidatePool.length) {
+    const error = new Error("선택한 카테고리에는 자동 생성용 후보가 아직 없습니다.");
+    error.status = 400;
+    throw error;
+  }
+
+  const index = buildCandidateSeed(challengeDate) % candidatePool.length;
+  return candidatePool[index];
 }
 
 async function fetchCategories(poolOrConnection) {
@@ -356,49 +376,15 @@ async function replaceSynonyms(poolOrConnection, challengeId, synonyms) {
   }
 }
 
-function createDailyWordChallengeService({ pool, buildTodayDateString, timezone }) {
-  const buildFallbackDate = () => buildTodayDateString(timezone);
-
-  async function listCategories() {
-    return fetchCategories(pool);
-  }
-
-  async function getDailyWordChallengeByDate(challengeDate, executor = pool) {
-    const normalizedDate = normalizeChallengeDate(challengeDate, buildFallbackDate());
-    const row = await fetchDailyWordRow(executor, normalizedDate);
-    return hydrateChallenge(executor, row);
-  }
-
-  async function getTodayDailyWordChallenge(executor = pool) {
-    return getDailyWordChallengeByDate(buildFallbackDate(), executor);
-  }
-
-  async function getDailySynonyms(challengeId, executor = pool) {
-    return fetchSynonyms(executor, challengeId);
-  }
-
-  async function createOrUpdateDailyWord(work) {
-    const connection = await pool.getConnection();
-
-    try {
-      await connection.beginTransaction();
-      const result = await work(connection);
-      await connection.commit();
-      return result;
-    } catch (error) {
-      await connection.rollback();
-      throw error;
-    } finally {
-      connection.release();
-    }
-  }
-
-  async function upsertDailyWordChallenge(payload = {}, options = {}) {
-    const normalizedDate = normalizeChallengeDate(payload.challengeDate, buildFallbackDate());
-    const normalizedPayload = normalizeChallengePayload(payload);
-    const overwrite = options.overwrite !== false;
-
-    return createOrUpdateDailyWord(async (connection) => {
+async function executeUpsertDailyWordChallenge({
+  createOrUpdateDailyWord,
+  getDailyWordChallengeByDate,
+  normalizedDate,
+  normalizedPayload,
+  overwrite,
+}) {
+  try {
+    return await createOrUpdateDailyWord(async (connection) => {
       const category = await resolveCategory(connection, normalizedPayload);
       const existingRow = await fetchDailyWordRow(connection, normalizedDate);
       const existingChallenge = await hydrateChallenge(connection, existingRow);
@@ -474,19 +460,151 @@ function createDailyWordChallengeService({ pool, buildTodayDateString, timezone 
       const updatedRow = await fetchDailyWordRow(connection, normalizedDate);
       return hydrateChallenge(connection, updatedRow);
     });
+  } catch (error) {
+    if (!isDuplicateChallengeDateError(error)) {
+      throw error;
+    }
+
+    const existing = await getDailyWordChallengeByDate(normalizedDate);
+    if (existing && !overwrite) {
+      return existing;
+    }
+
+    return createOrUpdateDailyWord(async (connection) => {
+      const category = await resolveCategory(connection, normalizedPayload);
+      const existingRow = await fetchDailyWordRow(connection, normalizedDate);
+      const existingChallenge = await hydrateChallenge(connection, existingRow);
+
+      if (!existingChallenge) {
+        throw error;
+      }
+
+      if (!overwrite) {
+        return existingChallenge;
+      }
+
+      const nextChallengeShape = {
+        ...normalizedPayload,
+        category,
+      };
+
+      if (shouldClearSharedHints(existingChallenge, nextChallengeShape)) {
+        await clearDailyWordHints(connection, existingChallenge.id);
+      }
+
+      if (shouldResetProgress(existingChallenge, nextChallengeShape)) {
+        await clearDailyWordProgress(connection, existingChallenge.id);
+      }
+
+      await connection.query(
+        `
+          UPDATE daily_word_challenges
+          SET
+            public_title = ?,
+            hidden_answer_text = ?,
+            hidden_category_id = ?,
+            fixed_hint_text = ?,
+            status = ?
+          WHERE id = ?
+        `,
+        [
+          normalizedPayload.publicTitle,
+          normalizedPayload.hiddenAnswerText,
+          category.id,
+          normalizedPayload.fixedHintText || null,
+          normalizedPayload.status,
+          existingChallenge.id,
+        ],
+      );
+
+      await replaceSynonyms(connection, existingChallenge.id, normalizedPayload.synonyms);
+
+      const updatedRow = await fetchDailyWordRow(connection, normalizedDate);
+      return hydrateChallenge(connection, updatedRow);
+    });
+  }
+}
+
+function createDailyWordChallengeService({ pool, buildTodayDateString, timezone }) {
+  const buildFallbackDate = () => buildTodayDateString(timezone);
+
+  async function listCategories() {
+    return fetchCategories(pool);
   }
 
-  async function ensureGeneratedDailyWordChallenge({ challengeDate, overwrite = false } = {}) {
+  async function getDailyWordChallengeByDate(challengeDate, executor = pool) {
     const normalizedDate = normalizeChallengeDate(challengeDate, buildFallbackDate());
+    const row = await fetchDailyWordRow(executor, normalizedDate);
+    return hydrateChallenge(executor, row);
+  }
+
+  async function getTodayDailyWordChallenge(executor = pool) {
+    return getDailyWordChallengeByDate(buildFallbackDate(), executor);
+  }
+
+  async function getDailySynonyms(challengeId, executor = pool) {
+    return fetchSynonyms(executor, challengeId);
+  }
+
+  async function createOrUpdateDailyWord(work) {
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+      const result = await work(connection);
+      await connection.commit();
+      return result;
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
+  async function upsertDailyWordChallenge(payload = {}, options = {}) {
+    const normalizedDate = normalizeChallengeDate(payload.challengeDate, buildFallbackDate());
+    const normalizedPayload = normalizeChallengePayload(payload);
+    const overwrite = options.overwrite !== false;
+
+    return executeUpsertDailyWordChallenge({
+      createOrUpdateDailyWord,
+      getDailyWordChallengeByDate,
+      normalizedDate,
+      normalizedPayload,
+      overwrite,
+    });
+  }
+
+  async function ensureGeneratedDailyWordChallenge({
+    challengeDate,
+    overwrite = false,
+    categoryId,
+    categorySlug,
+  } = {}) {
+    const normalizedDate = normalizeChallengeDate(challengeDate, buildFallbackDate());
+    let resolvedCategorySlug = trimText(categorySlug, 60);
+
+    if (!resolvedCategorySlug && Number.isFinite(Number(categoryId)) && Number(categoryId) > 0) {
+      const category = await resolveCategory(pool, { categoryId });
+      resolvedCategorySlug = category.slug;
+    }
 
     if (!overwrite) {
       const existing = await getDailyWordChallengeByDate(normalizedDate);
       if (existing) {
+        if (resolvedCategorySlug && existing.category?.slug !== resolvedCategorySlug) {
+          const error = new Error(
+            "이미 해당 날짜에 다른 카테고리의 오늘의 단어가 있습니다. 다시 생성으로 덮어쓰거나 날짜를 바꿔 주세요.",
+          );
+          error.status = 409;
+          throw error;
+        }
         return existing;
       }
     }
 
-    const candidate = pickDailyWordCandidate(normalizedDate);
+    const candidate = pickDailyWordCandidate(normalizedDate, resolvedCategorySlug);
 
     return upsertDailyWordChallenge(
       {
@@ -527,6 +645,7 @@ function createDailyWordChallengeService({ pool, buildTodayDateString, timezone 
 module.exports = {
   DAILY_WORD_CANDIDATES,
   createDailyWordChallengeService,
+  isDuplicateChallengeDateError,
   normalizeSynonyms,
   pickDailyWordCandidate,
 };

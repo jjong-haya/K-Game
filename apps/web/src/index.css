@@ -32,6 +32,17 @@
   select {
     font: inherit;
   }
+
+  select {
+    background-color: #fff9ec;
+    color: #111111;
+  }
+
+  select option,
+  select optgroup {
+    background-color: #fff9ec;
+    color: #111111;
+  }
 }
 
 @layer components {
@@ -108,6 +119,27 @@
 
   .speech-bubble {
     @apply relative max-w-[92%] rounded-[1.35rem] border-4 border-ink px-4 py-3 shadow-brutal-sm md:max-w-[82%];
+  }
+
+  .chat-typing {
+    @apply mt-2 flex items-end gap-2 py-2;
+    min-height: 2rem;
+  }
+
+  .chat-typing-dot {
+    width: 0.56rem;
+    height: 0.56rem;
+    border-radius: 999px;
+    background: #111111;
+    animation: chat-typing-bounce 900ms ease-in-out infinite;
+  }
+
+  .chat-typing-dot:nth-child(2) {
+    animation-delay: 120ms;
+  }
+
+  .chat-typing-dot:nth-child(3) {
+    animation-delay: 240ms;
   }
 
   .section-label {
@@ -317,6 +349,51 @@
   .brutal-scrollbar::-webkit-scrollbar-corner {
     background: transparent;
   }
+
+  .word-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #111111 #ffffff;
+    scrollbar-gutter: stable both-edges;
+    overscroll-behavior: contain;
+    background-color: #ffffff;
+  }
+
+  .word-scrollbar::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .word-scrollbar::-webkit-scrollbar-button,
+  .word-scrollbar::-webkit-scrollbar-button:single-button,
+  .word-scrollbar::-webkit-scrollbar-button:vertical:start,
+  .word-scrollbar::-webkit-scrollbar-button:vertical:end,
+  .word-scrollbar::-webkit-scrollbar-button:horizontal:start,
+  .word-scrollbar::-webkit-scrollbar-button:horizontal:end {
+    display: none;
+    width: 0;
+    height: 0;
+    background: transparent;
+  }
+
+  .word-scrollbar::-webkit-scrollbar-track {
+    background: #ffffff;
+    border: 2px solid #111111;
+    border-radius: 999px;
+  }
+
+  .word-scrollbar::-webkit-scrollbar-thumb {
+    background: #111111;
+    border: 2px solid #111111;
+    border-radius: 999px;
+  }
+
+  .word-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #2d2d2d;
+  }
+
+  .word-scrollbar::-webkit-scrollbar-corner {
+    background: transparent;
+  }
 }
 
 @keyframes login-stage-in {
@@ -385,6 +462,20 @@
 
   100% {
     background-position: 252px 50%;
+  }
+}
+
+@keyframes chat-typing-bounce {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.38;
+  }
+
+  40% {
+    transform: translateY(-6px);
+    opacity: 1;
   }
 }
 

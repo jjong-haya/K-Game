@@ -20,20 +20,8 @@ function isWordHintOperation(operation) {
 }
 
 function getLambdaConfig(operation, model = "nova") {
-  if (operation === "word_judge") {
-    if (model === "gemini" && (config.gameLambda.wordJudgeGemini.functionName || config.gameLambda.wordJudgeGemini.url)) {
-      return config.gameLambda.wordJudgeGemini;
-    }
-
-    return config.gameLambda.wordJudge;
-  }
-
-  if (operation === "word_reply") {
-    if (model === "gemini" && (config.gameLambda.wordReplyGemini.functionName || config.gameLambda.wordReplyGemini.url)) {
-      return config.gameLambda.wordReplyGemini;
-    }
-
-    return config.gameLambda.wordReply;
+  if (operation === "daily_word_generate") {
+    return config.gameLambda.dailyWordGenerate;
   }
 
   if (isWordHintOperation(operation)) {
@@ -108,21 +96,18 @@ function normalizeHighestGuess(value) {
 }
 
 function buildLambdaPayload(operation, payload = {}) {
-  if (operation === "word_judge" || operation === "question_answer") {
+  if (operation === "raw_prompt_lab") {
     return {
       operation,
-      answer: (payload.answer || payload.hiddenAnswer || "").toString().trim(),
-      question: (payload.question || payload.userInput || payload.inputText || "").toString().trim(),
-      category: (payload.category || payload.hiddenCategory || "").toString().trim(),
+      input: (payload.input || payload.prompt || payload.text || payload.userInput || "").toString(),
     };
   }
 
-  if (operation === "word_reply") {
+  if (operation === "question_answer") {
     return {
       operation,
-      analysis: payload.analysis || {},
-      judge: payload.judge || {},
-      safeContext: payload.safeContext || {},
+      hiddenAnswer: (payload.hiddenAnswer || payload.answer || "").toString().trim(),
+      userQuestion: (payload.userQuestion || payload.question || payload.userInput || payload.inputText || "").toString().trim(),
     };
   }
 
@@ -134,6 +119,18 @@ function buildLambdaPayload(operation, payload = {}) {
       categoryName: (payload.categoryName || "").toString().trim(),
       proposalNote: (payload.proposalNote || "").toString().trim(),
       categorySlug: (payload.categorySlug || "").toString().trim(),
+    };
+  }
+
+  if (operation === "daily_word_generate") {
+    return {
+      operation,
+      challengeDate: (payload.challengeDate || "").toString().trim(),
+      overwrite: Boolean(payload.overwrite),
+      categoryId: Number(payload.categoryId || 0) || null,
+      categorySlug: (payload.categorySlug || "").toString().trim(),
+      difficulty: (payload.difficulty || "normal").toString().trim(),
+      extraInstruction: (payload.extraInstruction || "").toString().trim(),
     };
   }
 
@@ -174,7 +171,7 @@ function buildLambdaPayload(operation, payload = {}) {
 }
 
 function buildFallbackResponse(operation, payload) {
-  if (operation === "word_judge" || operation === "word_reply" || operation === "question_answer") {
+  if (operation === "question_answer") {
     return {
       error: true,
       code: "ai_unavailable",
@@ -184,6 +181,14 @@ function buildFallbackResponse(operation, payload) {
 
   if (operation === "proposal_review") {
     return buildPromptRoomFallbackReview(payload);
+  }
+
+  if (operation === "daily_word_generate") {
+    return {
+      error: true,
+      code: "daily_word_generator_unavailable",
+      message: "오늘의 단어 생성 Lambda를 아직 사용할 수 없습니다.",
+    };
   }
 
   if (isWordHintOperation(operation)) {

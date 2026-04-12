@@ -40,13 +40,24 @@ try {
     Remove-Item $zipPath -Force
   }
 
-  $packageItems = @("src", "tests", "package.json", "package-lock.json", "README.md", "node_modules") |
+  $rootHandlerFiles = @("index.js", "index.mjs", "index.cjs") |
     Where-Object { Test-Path $_ }
+
+  $packageItems = @(
+    $rootHandlerFiles
+    "src"
+    "tests"
+    "package.json"
+    "package-lock.json"
+    "README.md"
+    "node_modules"
+  ) | Where-Object { $_ -and (Test-Path $_) }
 
   if (-not $packageItems.Count) {
     throw "No packageable items found in $resolvedLambdaDir"
   }
 
+  Write-Host ("Packaging Lambda files: " + ($packageItems -join ", "))
   Compress-Archive -Path $packageItems -DestinationPath $zipPath -Force
 
   aws lambda update-function-code `
