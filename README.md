@@ -14,7 +14,7 @@ K-Game은 사용자가 `오늘의 단어(Daily Word)`와 `프롬프트 룸(Promp
 - 관리자 페이지에서 오늘의 단어를 직접 수정하거나 자동 생성하는 운영 기능
 - 실시간 질문 응답, 힌트 생성, 배치 자동 생성을 Lambda로 분리한 구조
 
-즉 이 저장소는 “예제 화면을 조금 손본 과제”가 아니라, 기획/화면/백엔드/배포 구조를 다시 잡은 나만의 앱이라는 점을 README에서 바로 이해할 수 있도록 정리했습니다.
+즉 이 저장소는 "예제 화면을 조금 손본 과제"가 아니라, 기획/화면/백엔드/배포 구조를 다시 잡은 나만의 앱이라는 점을 README에서 바로 이해할 수 있도록 정리했습니다.
 
 ## 과제 요구사항 대응 요약
 
@@ -46,6 +46,7 @@ K-Game은 사용자가 `오늘의 단어(Daily Word)`와 `프롬프트 룸(Promp
 - `AWS Lambda`
   - `prompt-engine`, `prompt-hint`, `daily-word-generate` 중심의 AI/배치 처리
   - Bedrock `amazon.nova-pro-v1:0` 모델 사용
+  - EC2에서 Lambda Function URL을 통해 호출
 - `EventBridge`
   - 매일 자동 생성 배치 트리거
 - `RDS MySQL`
@@ -62,7 +63,7 @@ K-Game은 사용자가 `오늘의 단어(Daily Word)`와 `프롬프트 룸(Promp
 - `prompt-engine`
   - `question_answer`와 `raw_prompt_lab` 처리
 - `prompt-hint`
-  - 오늘의 단어 AI 힌트 생성
+  - 오늘의 단어 AI 단계별 힌트 생성
 - `daily-word-generate`
   - 오늘의 단어 자동 생성과 RDS 저장
 
@@ -78,12 +79,12 @@ K-Game은 사용자가 `오늘의 단어(Daily Word)`와 `프롬프트 룸(Promp
    현재 오늘의 단어 플레이는 예전 2단계 구조가 아니라 `prompt-engine`의 `question_answer` 한 번으로 판정과 캐릭터 반응을 함께 생성합니다.
 
 4. 운영과 발표 설명이 쉬워집니다.  
-   “실시간 AI Lambda”와 “매일 자동 생성 Lambda”를 분리해 설명할 수 있어 구조가 더 선명합니다.
+   "실시간 AI Lambda"와 "매일 자동 생성 Lambda"를 분리해 설명할 수 있어 구조가 더 선명합니다.
 
 ## 3티어 아키텍처
 
-- 프레젠테이션 계층: `S3 + CloudFront`
-- 애플리케이션 계층: `ALB + EC2 + Lambda`
+- 프레젠테이션 계층: `S3 정적 웹호스팅`
+- 애플리케이션 계층: `EC2 + Lambda`
 - 데이터 계층: `RDS MySQL`
 
 핵심은 **Lambda가 별도 4번째 계층이 아니라, 애플리케이션 계층 안에서 역할별로 분리된 서버리스 실행 컴포넌트**라는 점입니다.
@@ -94,12 +95,10 @@ K-Game은 사용자가 `오늘의 단어(Daily Word)`와 `프롬프트 룸(Promp
 flowchart LR
   subgraph T1["Presentation Tier"]
     Browser["사용자 브라우저"]
-    CloudFront["CloudFront"]
-    S3["S3 정적 파일"]
+    S3["S3 정적 웹호스팅"]
   end
 
   subgraph T2["Application Tier"]
-    ALB["ALB"]
     EC2["EC2 Express API"]
     PromptEngine["Lambda: prompt-engine"]
     PromptHint["Lambda: prompt-hint"]
@@ -112,10 +111,8 @@ flowchart LR
     RDS["RDS MySQL"]
   end
 
-  Browser --> CloudFront
-  CloudFront --> S3
-  Browser --> ALB
-  ALB --> EC2
+  Browser --> S3
+  Browser --> EC2
 
   EC2 -->|"question_answer / raw_prompt_lab"| PromptEngine
   EC2 -->|"ai_hint"| PromptHint
@@ -183,10 +180,23 @@ npm run dev:web
 
 - 게스트 로그인은 **평가 및 테스트를 위한 기능**입니다. 운영 환경에서는 비활성화하거나 제거할 수 있습니다.
 - 기본 사용자 흐름은 **게스트 로그인만으로 확인 가능**합니다.
-- 오늘의 단어에서는 `question_answer` 단일 단계 응답과 AI 힌트 흐름을 보여줄 수 있습니다.
+- ID 로그인으로 관리자 계정에 접근할 수 있습니다.
+- 오늘의 단어에서는 `question_answer` 단일 단계 응답과 AI 단계별 힌트 흐름을 보여줄 수 있습니다.
 - 프롬프트 룸에서는 제안, 평가, 점수 저장 흐름을 확인할 수 있습니다.
 - 관리자 화면에서는 오늘의 단어 조회, 수정, 자동 생성 재실행을 확인할 수 있습니다.
 - `README.md`, `docs/evaluator-guide.md`, `docs/architecture.md`만 읽어도 구조와 배포 방향이 이해되도록 문서를 맞췄습니다.
+
+## 인증 방식
+
+- 프론트엔드(S3)와 API 서버(EC2)가 서로 다른 도메인이므로, 쿠키 대신 **토큰 헤더 방식**을 사용합니다.
+- 로그인 시 API가 `sessionToken`을 응답 body에 포함하고, 프론트엔드가 localStorage에 저장한 뒤 `Authorization: Bearer` 헤더로 전송합니다.
+- 게스트 세션은 `sessionStorage`에, 소셜/ID 세션은 `localStorage`에 저장되어 새로고침 후에도 유지됩니다.
+
+## 게스트 계정 자동 정리
+
+- API 서버 시작 시, 그리고 24시간 주기로 만료된 게스트 계정을 자동 소프트 삭제합니다.
+- 유효한 세션이 남아있는 게스트는 건드리지 않습니다.
+- 로그아웃 시에도 게스트 계정은 즉시 비활성 처리됩니다.
 
 ## 선택용 테스트용 시드 계정
 
@@ -209,6 +219,7 @@ npm --prefix ./services/api run seed:accounts
 - 오늘의 단어 실시간 질문 응답 생성
 - `question_answer`로 판정과 캐릭터 반응을 한 번에 생성
 - AI Lab의 `raw_prompt_lab`도 처리
+- AI 응답에 정답이 포함되면 자동 차단 후 재시도 (정답 노출 방지)
 
 ### 2. `prompt-hint`
 
@@ -216,17 +227,7 @@ npm --prefix ./services/api run seed:accounts
 - 힌트 단계가 올라갈수록 점점 구체적인 힌트를 반환
 - 이전 힌트 목록을 참고하여 중복 없는 새 힌트 생성
 
-### 3. `word-judge`
-
-- 현재 구조에서는 제거된 레거시 단계입니다.
-- 과거 2단계 구조에서 질문 판정을 담당했지만, 지금은 `prompt-engine`의 `question_answer`로 통합되었습니다.
-
-### 4. `word-reply`
-
-- 현재 구조에서는 제거된 레거시 단계입니다.
-- 과거 2단계 구조에서 캐릭터 반응 생성을 담당했지만, 지금은 `prompt-engine`의 `question_answer`로 통합되었습니다.
-
-### 5. `daily-word-generate`
+### 3. `daily-word-generate`
 
 - 매일 오늘의 단어 자동 생성 배치
 - Bedrock으로 단어 생성 (연예인, 위인, 일상용어 등 다양한 카테고리)
@@ -236,29 +237,19 @@ npm --prefix ./services/api run seed:accounts
 
 각 Lambda는 아래 파일만 zip으로 묶어 배포합니다.
 
+- `index.js` (루트 핸들러 shim — 모든 Lambda에 필요)
 - `src/`
-- `tests/`
 - `package.json`
 - `package-lock.json`
-- `README.md`
 - `node_modules/`
-
-추가로 `prompt-engine`처럼 루트 핸들러 shim을 쓰는 Lambda는 아래 파일도 함께 포함해야 합니다.
-
-- `index.js`
-- `index.mjs`
-- `index.cjs`
 
 예시:
 
 ```bash
 npm --prefix ./services/lambdas/prompt-engine install
-npm --prefix ./services/lambdas/prompt-engine run zip
+cd services/lambdas/prompt-engine
+zip -r prompt-engine.zip index.js src/ package.json package-lock.json node_modules/
 ```
-
-생성 결과:
-
-- `services/lambdas/prompt-engine/prompt-engine.zip`
 
 각 Lambda의 상세 설명과 업로드 순서는 개별 README에 정리해 두었습니다.
 
