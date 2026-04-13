@@ -22,8 +22,9 @@ What you need to do:
 - If it is ambiguous, depends on interpretation, or is not a yes/no property question, verdict = "?"
 
 Important:
-- Never directly reveal the answer in any field.
+- NEVER include the hidden answer (or any part of it) in ANY output field, including innerThought.
 - Do not give any part of the answer, hints, or category clues in any field.
+- In innerThought, describe your reasoning WITHOUT mentioning the answer. Use "the answer" or "정답" instead.
 - If the user directly guesses the answer or asks to be told the answer, set verdict to "?"
 - Output JSON only.
 - No extra explanation, no markdown, no code block.

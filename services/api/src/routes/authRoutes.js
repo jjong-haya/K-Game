@@ -32,6 +32,7 @@ function registerAuthRoutes(app, deps) {
 
       setSessionCookie(res, authPayload.sessionToken, authPayload.expiresAt);
       res.status(201).json({
+        sessionToken: authPayload.sessionToken,
         expiresAt: authPayload.expiresAt,
         player: buildPlayerPayload(authPayload.player),
       });
@@ -50,6 +51,7 @@ function registerAuthRoutes(app, deps) {
       const authPayload = await authService.createGuestSession(nickname);
       setSessionCookie(res, authPayload.sessionToken, authPayload.expiresAt);
       res.status(201).json({
+        sessionToken: authPayload.sessionToken,
         expiresAt: authPayload.expiresAt,
         player: buildPlayerPayload(authPayload.player),
       });
@@ -68,6 +70,7 @@ function registerAuthRoutes(app, deps) {
       const result = await authService.loginWithCredentials(username, password);
       setSessionCookie(res, result.sessionToken, result.expiresAt);
       res.json({
+        sessionToken: result.sessionToken,
         expiresAt: result.expiresAt,
         player: buildPlayerPayload({
           ...result.player,
@@ -84,12 +87,14 @@ function registerAuthRoutes(app, deps) {
   });
 
   app.get("/api/auth/session", async (req, res) => {
+    const token = getPlayerToken(req);
     const auth = await requireAuth(req, res);
     if (!auth) {
       return;
     }
 
     res.json({
+      sessionToken: token,
       expiresAt: auth.session.expiresAt,
       player: auth.player,
     });

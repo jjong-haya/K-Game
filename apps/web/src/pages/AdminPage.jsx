@@ -358,9 +358,6 @@ function AdminPage() {
         <DailyHeader
           title="오늘의 단어 관리"
           subtitle="날짜를 바꾸면 먼저 조회만 하고, 비어 있으면 자동 생성, 이미 있으면 같은 버튼이 다시 생성으로 바뀝니다."
-          chips={["관리자 전용", "자동 생성", "수동 수정"]}
-          stats={dailyStats}
-          layout="inline-stats"
         />
 
         <section className="brutal-panel bg-white">

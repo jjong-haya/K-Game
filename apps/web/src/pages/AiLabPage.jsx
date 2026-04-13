@@ -1,15 +1,7 @@
 import { useState } from "react";
 
 function getApiBase() {
-  if (typeof window === "undefined") {
-    return "http://127.0.0.1:4000";
-  }
-
-  if (window.location.hostname === "localhost") {
-    return "http://localhost:4000";
-  }
-
-  return "http://127.0.0.1:4000";
+  return process.env.REACT_APP_API_BASE_URL || "";
 }
 
 function AiLabPage() {

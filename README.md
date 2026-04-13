@@ -39,12 +39,13 @@ K-Game은 사용자가 `오늘의 단어(Daily Word)`와 `프롬프트 룸(Promp
 
 ## 사용한 AWS 리소스
 
-- `S3 + CloudFront`
-  - 프론트 정적 파일 배포
-- `ALB + EC2`
+- `S3`
+  - 프론트 정적 파일 배포 (S3 정적 웹호스팅)
+- `EC2`
   - Express API 서버, 인증, 관리자 기능, 웹 요청 처리
 - `AWS Lambda`
   - `prompt-engine`, `prompt-hint`, `daily-word-generate` 중심의 AI/배치 처리
+  - Bedrock `amazon.nova-pro-v1:0` 모델 사용
 - `EventBridge`
   - 매일 자동 생성 배치 트리거
 - `RDS MySQL`
@@ -180,6 +181,7 @@ npm run dev:web
 
 ## 평가자가 확인 방법
 
+- 게스트 로그인은 **평가 및 테스트를 위한 기능**입니다. 운영 환경에서는 비활성화하거나 제거할 수 있습니다.
 - 기본 사용자 흐름은 **게스트 로그인만으로 확인 가능**합니다.
 - 오늘의 단어에서는 `question_answer` 단일 단계 응답과 AI 힌트 흐름을 보여줄 수 있습니다.
 - 프롬프트 룸에서는 제안, 평가, 점수 저장 흐름을 확인할 수 있습니다.
@@ -210,8 +212,9 @@ npm --prefix ./services/api run seed:accounts
 
 ### 2. `prompt-hint`
 
-- 오늘의 단어에서 AI 힌트 생성
-- 현재 추측 상태와 이전 힌트를 보고 짧은 보조 힌트 반환
+- 오늘의 단어에서 AI 단계별 힌트 생성
+- 힌트 단계가 올라갈수록 점점 구체적인 힌트를 반환
+- 이전 힌트 목록을 참고하여 중복 없는 새 힌트 생성
 
 ### 3. `word-judge`
 
@@ -226,7 +229,7 @@ npm --prefix ./services/api run seed:accounts
 ### 5. `daily-word-generate`
 
 - 매일 오늘의 단어 자동 생성 배치
-- Bedrock으로 단어/힌트/동의어 생성
+- Bedrock으로 단어 생성 (연예인, 위인, 일상용어 등 다양한 카테고리)
 - RDS 저장과 관리자 수동 재생성 요청 처리
 
 ## Lambda zip 패키지 규칙

@@ -119,10 +119,9 @@ function registerWordRoutes(app, deps) {
       return res.status(400).json({ message: "정답을 입력해 주세요." });
     }
 
-    const synonyms = await getDailySynonyms(challenge.id);
     const normalizedInput = answerText.replace(/\s+/g, "").toLowerCase();
     const normalizedAnswer = challenge.hiddenAnswerText.replace(/\s+/g, "").toLowerCase();
-    const isCorrect = isWordMatch(answerText, challenge.hiddenAnswerText, synonyms)
+    const isCorrect = isWordMatch(answerText, challenge.hiddenAnswerText)
       || (normalizedAnswer.length >= 2 && normalizedInput.includes(normalizedAnswer));
 
     if (isCorrect) {

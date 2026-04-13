@@ -18,18 +18,15 @@ You generate one Korean "daily word" challenge for an educational guessing game.
 Rules:
 - Return strict JSON only.
 - The answer must fit the selected category.
-- Prefer a concept, term, or phrase that is recognizable but not trivial.
-- Do not choose a full sentence, person name, phone number, URL, or private information.
-- fixedHintText must help the player but must not reveal the exact answer or any exact synonym.
-- synonyms should contain 1 to 5 acceptable variants or aliases.
+- Choose a wide variety: celebrities, historical figures, everyday objects, food, places, scientific terms, slang, etc.
+- Difficulty should be easy to medium — something most Korean adults would recognize.
+- Do not choose a full sentence, phone number, URL, or private information.
 - publicTitle should usually stay short and generic.
 
 Output shape:
 {
   "publicTitle": "오늘의 단어",
-  "hiddenAnswerText": "Korean answer",
-  "fixedHintText": "short Korean hint",
-  "synonyms": ["variant 1", "variant 2"]
+  "hiddenAnswerText": "Korean answer"
 }
 `.trim();
 
@@ -63,7 +60,11 @@ function trimText(value, maxLength) {
 }
 
 function normalizeChallengeDate(value, fallbackDate = buildTodayDateString()) {
-  const normalized = String(value || fallbackDate || "").trim().slice(0, 10);
+  let raw = value;
+  if (raw instanceof Date) {
+    raw = raw.toISOString().slice(0, 10);
+  }
+  const normalized = String(raw || fallbackDate || "").trim().slice(0, 10);
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
     const error = new Error("날짜 형식은 YYYY-MM-DD 여야 합니다.");

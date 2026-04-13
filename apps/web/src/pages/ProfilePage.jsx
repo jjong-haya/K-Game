@@ -132,20 +132,7 @@ function ProfilePage() {
     ];
   }, [dailyWord]);
 
-  const shortcutItems = useMemo(
-    () =>
-      [
-        isAdmin
-          ? {
-              title: "관리자 페이지",
-              description: "오늘의 단어 관리, 제안 검토, 자동 생성과 수동 수정은 여기서 할 수 있습니다.",
-              to: "/admin",
-              disabled: false,
-            }
-          : null,
-      ].filter(Boolean),
-    [isAdmin],
-  );
+  const shortcutItems = [];
 
   const handleNicknameSave = async (event) => {
     event.preventDefault();
