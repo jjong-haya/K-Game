@@ -52,7 +52,20 @@ K-Game은 사용자가 `오늘의 단어(Daily Word)`와 `프롬프트 룸(Promp
 - `RDS MySQL`
   - 사용자, 게임 기록, 오늘의 단어, 제안 데이터 저장
 - `Terraform`
-  - 핵심 인프라 선언형 관리
+  - 핵심 인프라 선언형 관리 (`infra/terraform/`)
+  - ALB, CloudFront, RDS, Lambda 등을 코드로 선언
+  - 현재 배포 환경에서는 IAM 권한 제한으로 Terraform 대신 수동 배포를 사용했습니다.
+  - Terraform 코드는 "권한이 충분한 환경에서의 목표 인프라 구조"로 남겨 두었습니다.
+
+## 현재 배포 환경의 제약과 우회
+
+현재 배포 환경은 교육용 공유 AWS 계정이며, IAM 권한이 제한되어 있습니다.
+
+- **CloudFront / ALB**: 생성 권한 없음 → S3 정적 웹호스팅 + EC2 직접 접근으로 대체
+- **HTTPS**: 인증서 발급/CloudFront 권한 없음 → HTTP 환경에서 운영
+- **인증 방식**: S3(프론트)와 EC2(API)가 서로 다른 도메인이므로 크로스도메인 쿠키가 동작하지 않음 → `sessionToken`을 응답 body에 포함하고 `Authorization: Bearer` 헤더로 전송하는 토큰 방식으로 우회
+- **소셜 로그인(Google/Apple)**: PKCE 인증에 필요한 `crypto.subtle`이 Secure Context(HTTPS 또는 localhost)에서만 동작 → 현재 HTTP 배포 환경에서는 사용 불가, localhost 개발 환경에서는 정상 동작
+- **Terraform**: `terraform apply` 권한 없음 → AWS CLI와 콘솔을 통한 수동 배포
 
 ## 왜 Lambda를 여러 개로 나눴는가
 
