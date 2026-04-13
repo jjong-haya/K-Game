@@ -412,10 +412,6 @@ async function handler(event) {
     return handleQuestionAnswer(rawPayload);
   }
 
-  if (operation === "raw_prompt_lab") {
-    return handleRawPromptLab(rawPayload);
-  }
-
   return createErrorResponse(operation, "unsupported_operation", "unsupported lambda operation.", 400);
 }
 

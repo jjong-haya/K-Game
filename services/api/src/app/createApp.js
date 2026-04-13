@@ -39,7 +39,6 @@ const {
 const { errorHandler } = require("../middleware/errorHandler");
 const { notFoundHandler } = require("../middleware/notFound");
 const { registerAdminRoutes } = require("../routes/adminRoutes");
-const { registerAiLabRoutes } = require("../routes/aiLabRoutes");
 const { registerAuthRoutes } = require("../routes/authRoutes");
 const { registerHealthRoutes } = require("../routes/healthRoutes");
 const { registerPromptRoutes } = require("../routes/promptRoutes");
@@ -1197,7 +1196,6 @@ function createApp({ pool }) {
   };
 
   registerHealthRoutes(app, routeDeps);
-  registerAiLabRoutes(app, routeDeps);
   registerAuthRoutes(app, routeDeps);
   registerWordRoutes(app, routeDeps);
   registerPromptRoutes(app, routeDeps);
