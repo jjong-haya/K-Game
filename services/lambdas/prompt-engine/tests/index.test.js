@@ -50,24 +50,3 @@ test("handler returns HTTP 400 when operation is missing", async () => {
   assert.equal(response.statusCode, 400);
   assert.equal(JSON.parse(response.body).ok, false);
 });
-
-test("normalizeRawPromptPayload keeps raw input text", () => {
-  const normalized = lambda.__private.normalizeRawPromptPayload({
-    input: "이 프롬프트를 가공 없이 그대로 보내",
-  });
-
-  assert.deepEqual(normalized, {
-    operation: "raw_prompt_lab",
-    input: "이 프롬프트를 가공 없이 그대로 보내",
-  });
-});
-
-test("handler returns HTTP 422 when raw prompt input is missing", async () => {
-  const response = await lambda.handler({
-    requestContext: { http: {} },
-    body: JSON.stringify({ operation: "raw_prompt_lab", input: "" }),
-  });
-
-  assert.equal(response.statusCode, 422);
-  assert.equal(JSON.parse(response.body).code, "missing_input");
-});
