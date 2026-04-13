@@ -289,6 +289,38 @@ npm run check:infra
 - 문서에는 로컬 절대 경로, 개인 흔적, 개인 연락처를 남기지 않습니다.
 - 날짜가 붙은 리뷰 문서는 과거 시점 스냅샷으로 보관하고, 현재 상태 설명은 현재용 README와 `/docs` 기준으로 읽습니다.
 
+## 향후 발전 방향
+
+권한이 충분한 환경이라면 아래 순서로 개선할 수 있습니다.
+
+1. **HTTPS + CloudFront**
+   - ACM 인증서 발급 후 CloudFront를 S3 앞에 배치
+   - 소셜 로그인(Google/Apple) 정상 동작, CDN 캐싱으로 로딩 속도 향상
+   - 토큰 헤더 방식 대신 쿠키 기반 인증으로 전환 가능
+
+2. **ALB + Private Subnet**
+   - EC2를 private subnet으로 이동하고 ALB를 통해서만 접근
+   - 헬스체크, 스케일아웃, 외부 직접 접근 차단
+
+3. **Terraform 적용**
+   - `infra/terraform/`에 이미 선언된 코드를 `terraform apply`로 실행
+   - 환경 복제(dev/staging/prod)와 인프라 변경 이력 관리
+
+4. **Lambda 보안 강화**
+   - DB 비밀번호를 Secrets Manager로 이동
+   - Lambda를 VPC 안에 배치하여 RDS private 접근
+   - Function URL 대신 API Gateway 사용 (인증, 속도 제한, 로깅)
+
+5. **운영 안정성**
+   - CloudWatch Alarm으로 EC2 CPU, Lambda 에러율 모니터링
+   - RDS 자동 백업 + Multi-AZ 구성
+   - GitHub Actions CI/CD로 테스트 → Lambda/S3 자동 배포
+
+6. **기능 확장**
+   - 프롬프트 룸 정식 오픈
+   - 실시간 랭킹 (WebSocket 또는 SSE)
+   - 관리자 대시보드 통계 차트
+
 ## 추가 문서
 
 - [프로젝트 개요](./docs/project-overview.md)
