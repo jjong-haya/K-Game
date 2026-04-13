@@ -74,7 +74,7 @@ K-Game은 사용자가 `오늘의 단어(Daily Word)`와 `프롬프트 룸(Promp
 최종적으로는 **실시간 질문 응답 / 힌트 / 자동 생성 배치**를 분리했습니다.
 
 - `prompt-engine`
-  - `question_answer`와 `raw_prompt_lab` 처리
+  - `question_answer` 처리
 - `prompt-hint`
   - 오늘의 단어 AI 단계별 힌트 생성
 - `daily-word-generate`
@@ -93,6 +93,22 @@ K-Game은 사용자가 `오늘의 단어(Daily Word)`와 `프롬프트 룸(Promp
 
 4. 운영과 발표 설명이 쉬워집니다.  
    "실시간 AI Lambda"와 "매일 자동 생성 Lambda"를 분리해 설명할 수 있어 구조가 더 선명합니다.
+
+## EC2와 Lambda의 역할 분담
+
+`prompt-engine`과 `prompt-hint`는 DB에 직접 접근하지 않고, Bedrock AI 호출만 수행합니다.  
+반면 `daily-word-generate`는 Lambda 안에서 직접 RDS에 저장합니다.
+
+이렇게 나눈 이유는 아래와 같습니다.
+
+- 질문 응답 흐름은 인증 확인 → DB 조회 → AI 호출 → 정답 노출 검사 → DB 저장 → 리더보드 업데이트 등 **10단계 이상의 비즈니스 로직**이 필요합니다. AI 호출은 그중 한 단계일 뿐이므로, EC2가 전체 흐름을 관리하고 Lambda는 AI 호출만 전담합니다.
+- 모든 Lambda에 DB 연결을 넣으면 커넥션 풀 관리가 어렵고, 콜드스타트마다 DB 연결이 발생해 느려집니다.
+- `daily-word-generate`는 EventBridge에서 EC2 없이 직접 호출되는 배치 작업이므로, Lambda 안에서 DB 접근이 필요합니다.
+
+```
+[사용자 질문] → EC2(인증/DB/로직) → prompt-engine(AI만) → EC2가 DB 저장
+[EventBridge]  → daily-word-generate(AI + DB 저장)
+```
 
 ## 3티어 아키텍처
 
@@ -320,6 +336,7 @@ npm run check:infra
    - 프롬프트 룸 정식 오픈
    - 실시간 랭킹 (WebSocket 또는 SSE)
    - 관리자 대시보드 통계 차트
+   - 유저가 직접 단어를 정하고 방을 만들어 친구를 초대하거나, 온라인에서 다른 유저들이 참여해 맞추는 멀티플레이 게임 모드
 
 ## 추가 문서
 
