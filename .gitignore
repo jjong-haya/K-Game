@@ -70,3 +70,4 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 *.egg-info/
+gh_2.63.2_linux_amd64/
