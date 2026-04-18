@@ -9,6 +9,6 @@
     "zip": "powershell Compress-Archive -Path index.js,src,tests,package.json,package-lock.json,README.md,node_modules -DestinationPath prompt-engine.zip -Force"
   },
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.760.0"
+    "@aws-sdk/client-bedrock-runtime": "^3.1032.0"
   }
 }
